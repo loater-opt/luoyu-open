@@ -1,4 +1,7 @@
 /**
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (C) 2026 落雨纪元团队
+ *
  * luoyu-open — 落雨 ActApp 开源模块总入口
  *
  * 依据 GNU Lesser General Public License v3.0 发布。

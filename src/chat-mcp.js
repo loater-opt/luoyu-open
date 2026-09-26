@@ -1,4 +1,11 @@
 /**
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (C) 2026 落雨纪元团队
+ *
+ * 本文件是「落雨 AI 伴侣 · 开源工具集」的一部分，
+ * 依据 GNU Lesser General Public License v3.0 发布。
+ * 许可证全文见仓库根目录 LICENSE。
+ *
  * chat-mcp.js — 聊天里的 MCP / API 服务调用桥接
  *
  * 让用户在 MCP 页配置的「远程 MCP 服务器」和「API 服务」真正被 AI 在聊天中调用：

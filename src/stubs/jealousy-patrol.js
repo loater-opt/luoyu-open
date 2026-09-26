@@ -1,4 +1,11 @@
 /**
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (C) 2026 落雨纪元团队
+ *
+ * 本文件是「落雨 AI 伴侣 · 开源工具集」的一部分，
+ * 依据 GNU Lesser General Public License v3.0 发布。
+ * 许可证全文见仓库根目录 LICENSE。
+ *
  * jealousy-patrol.js — 功能模块接口桩
  *
  * 「吃醋巡查」：定时采集今日 App 使用记录，交由模型按人设判断情绪，

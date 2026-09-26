@@ -1,4 +1,11 @@
 /**
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (C) 2026 落雨纪元团队
+ *
+ * 本文件是「落雨 AI 伴侣 · 开源工具集」的一部分，
+ * 依据 GNU Lesser General Public License v3.0 发布。
+ * 许可证全文见仓库根目录 LICENSE。
+ *
  * workflow-scheduler.js — 全局工作流定时调度器
  * 在 App.vue 后台运行（无需打开工作流页面），App 在后台/前台都能定时触发。
  *

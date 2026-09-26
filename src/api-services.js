@@ -1,3 +1,12 @@
+/**
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (C) 2026 落雨纪元团队
+ *
+ * 本文件是「落雨 AI 伴侣 · 开源工具集」的一部分，
+ * 依据 GNU Lesser General Public License v3.0 发布。
+ * 许可证全文见仓库根目录 LICENSE。
+ */
+
 // 落雨 API 服务：用户配置的开放平台 API 凭证，供 AI 对话中直接调用
 //
 // 用法：

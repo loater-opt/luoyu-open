@@ -1,4 +1,11 @@
 /**
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (C) 2026 落雨纪元团队
+ *
+ * 本文件是「落雨 AI 伴侣 · 开源工具集」的一部分，
+ * 依据 GNU Lesser General Public License v3.0 发布。
+ * 许可证全文见仓库根目录 LICENSE。
+ *
  * chat-tools.js — 增强对话工具包（AI 通过 ToolCall 调用）
  *
  * 提供以下工具：

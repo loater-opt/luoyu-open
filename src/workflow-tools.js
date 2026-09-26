@@ -1,4 +1,11 @@
 /**
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (C) 2026 落雨纪元团队
+ *
+ * 本文件是「落雨 AI 伴侣 · 开源工具集」的一部分，
+ * 依据 GNU Lesser General Public License v3.0 发布。
+ * 许可证全文见仓库根目录 LICENSE。
+ *
  * workflow-tools.js — 对话中的工作流工具（AI 通过 ToolCall 调用）
  *
  * 提供工作流的创建、编辑、启停、删除等管理工具，由 AI 在对话中按需调用。
