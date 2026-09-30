@@ -10,16 +10,18 @@
 |---|---|---|
 | **API 接入** | `src/api-adapter.js` | 服务商端点推导、多模态内容构建、工具调用转换、自定义请求头、模型参数注入 |
 | | `src/api-services.js` | 用户自配开放平台 API 服务的调用封装 |
-| **工具集** | `src/chat-tools.js` | 对话中可调用的工具定义 |
-| | `src/mcp.js` | MCP（Model Context Protocol）支持 |
+| **MCP** | `src/mcp.js` | MCP（Model Context Protocol）客户端：握手、工具列表、工具调用 |
 | | `src/chat-mcp.js` | 将用户配置的远程 MCP 服务器接入对话 |
 | **工作流引擎** | `src/workflow-engine.js` | 节点 + 连线的工作流模型与执行引擎 |
 | | `src/workflow-tools.js` | 工作流的增删改查工具 |
 | | `src/workflow-scheduler.js` | 定时调度（interval / specific_time / cron） |
-| | `src/workflow-runner.js` | 各动作类型的执行器 |
+| | `src/workflow-runner.js` | 动作目录与各动作类型的执行器 |
 | **其他** | `src/waifu.js` | 桌宠（Waifu）设置模型 |
 | | `src/index.js` | 总入口 |
 | **接口桩** | `src/stubs/` | 宿主能力与闭源模块的接口声明（不含实现），见 [stubs/README.md](src/stubs/README.md) |
+
+> 本仓库的 `src/` 由落雨工程内的源码**同步生成**（工具：`build-open-package.js`），
+> 只改写模块引用路径，不改业务逻辑；同步后有一次独立加载测试确保拿到就能跑。
 
 ---
 

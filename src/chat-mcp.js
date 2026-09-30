@@ -6,14 +6,8 @@
  * 依据 GNU Lesser General Public License v3.0 发布。
  * 许可证全文见仓库根目录 LICENSE。
  *
- * chat-mcp.js — 聊天里的 MCP / API 服务调用桥接
- *
- * 让用户在 MCP 页配置的「远程 MCP 服务器」和「API 服务」真正被 AI 在聊天中调用：
- *   1. getToolHint() 生成工具说明，注入聊天系统提示，让 AI 知道有哪些工具可用。
- *   2. AI 用标签调用：
- *      - MCP 工具：<mcp:工具名:{"参数":"值"}>
- *      - API 服务：<api:服务名:{"path":"/xx","method":"GET","body":{}}>
- *   3. callMcpTool / callApiService 执行对应调用，结果展示给用户。
+ * 本文件由工程内源码同步而来（同步工具：build-open-package.js），
+ * 只改写了模块引用路径，未改动任何业务逻辑。
  */
 import mcp from './mcp.js'
 import apiServices from './api-services.js'

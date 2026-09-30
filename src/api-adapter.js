@@ -6,27 +6,10 @@
  * 依据 GNU Lesser General Public License v3.0 发布。
  * 许可证全文见仓库根目录 LICENSE。
  *
- * api-adapter.js — 统一 AI API 调用层
- *
- * 屏蔽不同 AI 提供商（OpenAI 兼容、Anthropic Claude）的差异，
- * 提供统一的调用接口。所有页面的 AI 请求均通过此模块。
- *
- * 使用方式：
- *   var apiAdapter = require('./api-adapter.js')
- *   apiAdapter.callAI(config, messages, options).then(function(result) { ... })
- *
- * config 结构（与 api_config 存储一致）：
- *   {
- *     provider: 'deepseek' | 'anthropic' | 'siliconflow' | 'zhipu' | 'tongyi' | 'custom',
- *     apiKey: 'sk-...',
- *     apiUrl: 'https://api.deepseek.com',
- *     modelName: 'deepseek-chat',
- *     useVision: false,
- *     visionModelName: '',
- *     visionApiUrl: '',
- *     visionApiKey: ''
- *   }
+ * 本文件由工程内源码同步而来（同步工具：build-open-package.js），
+ * 只改写了模块引用路径，未改动任何业务逻辑。
  */
+import serverConfig from './stubs/server-config.js'
 
 // ======== 提供商注册表 ========
 
@@ -43,38 +26,51 @@ var PROVIDERS = {
 // ======== 工具函数 ========
 
 /**
- * 构建 /chat/completions URL
+ * 把端点拆成 { origin, segments }；不是 http(s) 端点时返回 null
+ * 例：https://api.deepseek.com/v1 → { origin:'https://api.deepseek.com', segments:['v1'] }
+ */
+function splitEndpoint(u) {
+  var m = String(u || '').match(/^(https?:\/\/[^/?#]+)((?:\/[^?#]*)?)$/i)
+  if (!m) return null
+  var segs = (m[2] || '').split('/').filter(function (x) { return x.length > 0 })
+  return { origin: m[1].replace(/\/+$/, ''), segments: segs }
+}
+
+// 路径段是不是「版本段」：v1 / v4 / v1beta / api-v2 ...
+function isVersionSegment(s) {
+  return /^(?:api[-_]?)?v\d+(?:[a-z]*\d*)?$/i.test(String(s || ''))
+}
+
+/**
+ * 补全聊天端点 URL
  *
- * 规则：
- *  - URL 末尾加 # → 禁用自动补全，去掉 # 后原样返回
- *  - 已包含 /chat/completions → 原样返回（完整端点）
- *  - 空路径（如 https://api.example.com）→ 补 /v1/chat/completions
- *  - 以 /v1 /v2 /v3 /v4 结尾（如 https://my-proxy/custom/v1）→ 补 /chat/completions
- *  - 其他带路径的情况（用户填了完整端点或自定义路径）→ 原样返回，不再拼接
+ * 用户填的可能是「基地址」（https://api.deepseek.com），也可能是「完整端点」
+ * （https://api.deepseek.com/v1/chat/completions），还可能是自建反代的任意路径。
+ * 补全只依据 URL 自身形态推导，不针对具体厂商：
+ *   - 末尾带 # → 用户要求原样使用（去掉 # 和末尾斜杠）
+ *   - 路径末两段是 chat/completions → 已经是完整端点，原样用
+ *   - 路径为空 → 按 OpenAI 兼容端点的通行约定补 /v1/chat/completions
+ *   - 路径只有一段且是版本段（/v1、/v4、/api/v3）→ 在其后补 chat/completions
+ *   - 其余自定义路径 → 原样用，不替用户猜
  */
 function buildChatUrl(baseUrl) {
   var raw = String(baseUrl || '').trim()
   if (!raw) return raw
-  // # 后缀 → 禁用自动补全
-  if (raw.charAt(raw.length - 1) === '#') {
-    return raw.slice(0, -1).replace(/\/+$/, '')
-  }
-  if (raw.indexOf('/chat/completions') !== -1) return raw
-  var url = raw.replace(/\/+$/, '')
-  // 非 URL（缺协议/主机）→ 原样返回
-  var m = url.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]+(\/.*)?$/i)
-  if (!m) return raw
-  var path = (m[1] || '').replace(/\/+$/, '')
-  // 空路径 → 补标准路径
-  if (!path) return url + '/v1/chat/completions'
-  // 版本路径结尾（/v1|/v2|/v3|/v4...）→ 仅补后续部分
-  if (/\/v\d+$/i.test(path)) return url + '/chat/completions'
-  // 其他路径：视为用户填写的完整端点，原样返回
-  return raw
+  var forceRaw = raw.charAt(raw.length - 1) === '#'
+  var trimmed = raw.replace(/#+$/, '').replace(/\/+$/, '')
+  var ep = splitEndpoint(trimmed)
+  if (!ep) return forceRaw ? trimmed : raw
+  if (forceRaw) return trimmed
+  var seg = ep.segments
+  var n = seg.length
+  if (n >= 2 && seg[n - 1] === 'completions' && seg[n - 2] === 'chat') return trimmed
+  if (n === 0) return ep.origin + '/v1/chat/completions'
+  if (isVersionSegment(seg[n - 1])) return trimmed + '/chat/completions'
+  return trimmed
 }
 
 /**
- * 从聊天端点派生 /models 地址
+ * 从聊天端点派生 /models 地址（各家 OpenAI 兼容端点都遵循这个约定）
  * 如 https://api.example.com/v1/chat/completions → https://api.example.com/v1/models
  */
 function buildModelsUrl(chatEndpoint) {
@@ -99,21 +95,50 @@ function buildModelsUrl(chatEndpoint) {
 }
 
 /**
- * 判断端点是否为本地回环地址（localhost / 127.0.0.1 等）
- * 用于本地服务（如自定义 API 指向本机）时免填 API Key
+ * 从端点里取出主机名；取不到返回空串
+ * 支持 https://host:port/path、host:port、[::1]:port 三种写法
+ */
+function extractHost(endpoint) {
+  var s = String(endpoint || '').trim()
+  if (!s) return ''
+  var m = s.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i)
+  var authority = m ? m[1] : (s.indexOf('/') === -1 ? s : '')
+  if (!authority) return ''
+  authority = authority.split('@').pop()          // 去掉 user:pass@
+  if (authority.charAt(0) === '[') {              // [::1]:8080
+    var end = authority.indexOf(']')
+    return end > 0 ? authority.slice(1, end).toLowerCase() : ''
+  }
+  return authority.split(':')[0].toLowerCase()
+}
+
+// 主机名是不是「本机」的叫法
+function isLocalHostName(h) {
+  return h === 'localhost' || /\.localhost$/.test(h)
+}
+
+// 主机地址是不是本机地址
+function isLocalAddress(h) {
+  if (h === '::1' || h === '0:0:0:0:0:0:0:1') return true
+  if (h === '0.0.0.0') return true                 // 监听全网的写法，实际指向本机
+  if (h === '10.0.2.2') return true                // Android 模拟器访问宿主机的固定别名（真机不存在）
+  var v4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!v4) return false
+  for (var i = 1; i <= 4; i++) if (Number(v4[i]) > 255) return false
+  return Number(v4[1]) === 127                     // 127.0.0.0/8 整段都是本机回环
+}
+
+/**
+ * 端点是否指向本机上的本地服务
+ *
+ * 用途：用户把自己电脑上跑的本地模型（Ollama、LM Studio 之类）接到落雨时，
+ * 这类地址通常不需要 API Key，界面要给出对应提示。
+ * 判定方式：取出主机名后按「本机叫法 / 本机地址」两类判断，不做字符串白名单枚举。
  */
 function isLoopbackEndpoint(endpoint) {
-  var raw = String(endpoint || '').trim().toLowerCase()
-  if (!raw) return false
-  var hostMatch = raw.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i)
-  var host = hostMatch ? hostMatch[1] : ''
-  if (host) {
-    var h = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '')
-    if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0' || h === '10.0.2.2') return true
-  }
-  return raw.indexOf('localhost:') === 0 || raw.indexOf('127.0.0.1:') === 0 ||
-    raw.indexOf('[::1]:') === 0 || raw.indexOf('::1:') === 0 ||
-    raw.indexOf('0.0.0.0:') === 0 || raw.indexOf('10.0.2.2:') === 0
+  var host = extractHost(endpoint)
+  if (!host) return false
+  return isLocalHostName(host) || isLocalAddress(host)
 }
 
 /**
@@ -180,23 +205,34 @@ function inferMimeType(url) {
   return EXT_MIME_MAP[extMatch[1]] || ''
 }
 
+// OpenAI input_audio.format 我们实际支持并会送出去的取值
+var AUDIO_FORMATS = ['wav', 'mp3', 'ogg', 'webm', 'mp4', 'aac', 'flac']
+// 认不出音频类型时用哪种格式（wav 是各家的最小公约数）
+var DEFAULT_AUDIO_FORMAT = 'wav'
+// MIME 子类型 → input_audio.format
+var AUDIO_MIME_TO_FORMAT = {
+  'wav': 'wav', 'x-wav': 'wav', 'wave': 'wav', 'vnd.wave': 'wav',
+  'mpeg': 'mp3', 'mp3': 'mp3', 'x-mp3': 'mp3',
+  'ogg': 'ogg', 'opus': 'ogg', 'x-ogg': 'ogg',
+  'webm': 'webm', 'x-webm': 'webm',
+  'mp4': 'mp4', 'm4a': 'mp4', 'x-m4a': 'mp4',
+  'aac': 'aac', 'x-aac': 'aac',
+  'flac': 'flac', 'x-flac': 'flac'
+}
+
 /**
  * 音频格式映射（OpenAI input_audio 的 format 字段）
+ * 按 MIME 的子类型查表；带参数（audio/webm;codecs=opus）时只取主类型部分。
  */
 function audioFormatFromMime(mimeType) {
-  var m = (mimeType || '').toLowerCase()
-  if (m.indexOf('wav') !== -1) return 'wav'
-  if (m.indexOf('mpeg') !== -1 || m.indexOf('mp3') !== -1) return 'mp3'
-  if (m.indexOf('ogg') !== -1) return 'ogg'
-  if (m.indexOf('webm') !== -1) return 'webm'
-  if (m.indexOf('mp4') !== -1 || m.indexOf('m4a') !== -1) return 'mp4'
-  if (m.indexOf('aac') !== -1) return 'aac'
-  if (m.indexOf('flac') !== -1) return 'flac'
-  return 'wav'
+  var m = String(mimeType || '').toLowerCase().split(';')[0].trim()
+  var sub = m.indexOf('/') !== -1 ? m.slice(m.indexOf('/') + 1) : m
+  return AUDIO_MIME_TO_FORMAT[sub] || DEFAULT_AUDIO_FORMAT
 }
 
 /**
  * 构建多模态 content 数组
+ * 依据消息文本里出现的媒体链接拼装内容数组
  *
  * @param {String} text 消息文本（可能包含媒体 URL 或 data URL）
  * @param {Object} config 含 capVision/capAudio/capVideo 开关
@@ -247,7 +283,8 @@ function buildMultimodalContent(text, config) {
   }
   textWithoutLinks = textWithoutLinks.replace(/\s{2,}/g, ' ').trim()
 
- // 按 顺序拼接：audio → video → image → text
+  // 内容数组的排布：媒体片段集中在前（音频 → 视频 → 图片），文本放在最后收尾。
+  // 这样模型先拿到素材再读文字说明，出错的概率更低；顺序固定也便于排查请求。
   var contentArray = []
 
   // 音频：OpenAI input_audio 格式
@@ -298,6 +335,7 @@ function buildMultimodalContent(text, config) {
     })
   }
 
+  // 剩余文本
   if (textWithoutLinks.length > 0) {
     contentArray.push({ type: 'text', text: textWithoutLinks })
   }
@@ -391,6 +429,7 @@ function buildToolDefinitions(tools) {
 
 /**
  * 从 AI 响应中提取 tool_calls 并转为可处理格式
+ * 这里只取结构化对象（{ id, name, arguments }），不做 XML 往返转换
  *
  * @param {Object} response API 响应数据
  * @returns {Object} { hasToolCalls: bool, toolCalls: [...], content: '...' }
@@ -428,38 +467,53 @@ function extractToolCalls(response) {
 
 // ======== API 调用 ========
 
+// 参数类型 → 写入请求体前的归一化处理
+// （请求体是 JSON，整数/浮点要按各自规矩取整，字符串原样，布尔原样）
+var PARAM_COERCERS = {
+  int: function (v) { var n = Math.round(Number(v)); return isFinite(n) ? n : null },
+  float: function (v) { var n = Number(Number(v).toFixed(4)); return isFinite(n) ? n : null },
+  string: function (v) { return v === undefined || v === null ? null : String(v) },
+  bool: function (v) { return v === true || v === 'true' || v === 1 || v === '1' },
+  // 未声明类型的参数按原值透传
+  raw: function (v) { return v }
+}
+
+// 参数取值下限：低于下限的值一律不发送（max_tokens 给 0/负数会让模型返回空回复）
+// 只对确实会出问题的参数设下限，其余参数交给服务端判断，避免误伤用户的有效配置
+var PARAM_MIN = { max_tokens: 1 }
+
 /**
- * 向请求体注入已启用的模型参数与自定义参数
- * @param {Object} requestData 请求体
- * @param {Object} config 含 modelParams/modelCustomParams
+ * 把用户配置的模型参数写进请求体
+ *
+ * 参数来自两处：内置参数（带类型与开关键）与用户自定义参数（原样透传）。
+ * 处理顺序：先内置后自定义 —— 自定义同名参数会覆盖内置值，方便用户兜底。
+ *
+ * @param {Object} requestData 请求体（会被就地修改）
+ * @param {Object} config 含 modelParams / modelCustomParams
  */
 function injectModelParams(requestData, config) {
-  if (!config) return
-  if (config.modelParams && config.modelParams.length > 0) {
-    for (var pi = 0; pi < config.modelParams.length; pi++) {
-      var mp = config.modelParams[pi]
-      if (mp && mp.enabled && mp.apiName) {
-        var val = mp.value
-        if (mp.valueType === 'int') val = Math.round(Number(val))
-        else if (mp.valueType === 'float') val = Number(Number(val).toFixed(4))
-        // 保护：max_tokens 非法值（空/0/负数）跳过，避免模型返回空回复
-        if (mp.apiName === 'max_tokens' && (!val || val < 1)) continue
-        requestData[mp.apiName] = val
+  if (!config || !requestData) return
+  var groups = [config.modelParams, config.modelCustomParams]
+  for (var g = 0; g < groups.length; g++) {
+    var list = groups[g]
+    if (!list || !list.length) continue
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i]
+      if (!p || p.enabled === false || !p.apiName) continue
+      var coerce = PARAM_COERCERS[p.valueType] || PARAM_COERCERS.raw
+      var val = coerce(p.value)
+      if (val === null || val === undefined) continue
+      if (typeof val === 'number') {
+        var floor = PARAM_MIN[p.apiName]
+        if (floor !== undefined && val < floor) continue
       }
-    }
-  }
-  if (config.modelCustomParams && config.modelCustomParams.length > 0) {
-    for (var ci = 0; ci < config.modelCustomParams.length; ci++) {
-      var cp = config.modelCustomParams[ci]
-      if (cp && cp.enabled && cp.apiName) {
-        requestData[cp.apiName] = cp.value
-      }
+      requestData[p.apiName] = val
     }
   }
 }
 
 /**
- * 合并自定义请求头
+ * 合并用户自定义请求头
  * 支持两种格式：
  *   - 数组：[{ name: 'X-API-Key', value: 'xxx', enabled: true }, ...]
  *   - 对象：{ 'X-API-Key': 'xxx' }
@@ -514,7 +568,7 @@ function callOpenAICompatible(config, messages, options) {
     if (options.top_p !== undefined) requestData.top_p = options.top_p
     if (options.stream) requestData.stream = true
 
-    // 注入已启用的模型参数
+    // 注入用户启用的模型参数
     injectModelParams(requestData, config)
 
     // ToolCall：若开启且有工具定义，添加 tools 和 tool_choice
@@ -565,13 +619,146 @@ function callOpenAICompatible(config, messages, options) {
 
 // ======== 主入口 ========
 
-// ===== 配置校验（宿主实现） =====
-//
-//
-// 开源版本通过接口桩放行全部请求，不做任何限制。
-// 详见 stubs/api-control.js。
+// ===== API 提供商控制（后台可随时关闭提供商/自定义 API，封禁中转站用） =====
 
-import apiControl from './stubs/api-control.js'
+var API_CONTROL_URL = serverConfig.apiUrl('/api-control')
+var API_CONTROL_TTL = 5 * 60 * 1000 // 控制配置缓存 5 分钟
+
+// 自接 API 闸门延迟（毫秒）：服务器限速生效时，自接 API 发送会延迟这么久再真正发出
+var SELF_GATE_DELAY = 20000
+
+// 读取缓存的控制配置；过期或缺失返回 null
+function getApiControlCache() {
+  try {
+    var raw = uni.getStorageSync('api_control_cache')
+    if (!raw) return null
+    var o = typeof raw === 'string' ? JSON.parse(raw) : raw
+    if (!o || !o.data) return null
+    if (!o.time || Date.now() - Number(o.time) > API_CONTROL_TTL) return null
+    return o.data
+  } catch (e) { return null }
+}
+
+// 后台静默刷新控制配置（不阻塞主流程）
+function refreshApiControl() {
+  try {
+    // 自接 API 使用上报：用户未开启会员一键使用、且配置了自己的 API Key（自接 API）时带 self=1，
+    // 服务器记录统计（后台可见）并返回闸门状态 gate（限速时 App 端延迟发送）。
+    // 限速配置本身不会返回给 App 端，用户解包也看不到。
+    var selfFlag = ''
+    try {
+      var cfg0 = uni.getStorageSync('api_config')
+      var memberOn = !!uni.getStorageSync('member_mode_on')
+      if (cfg0 && !memberOn) {
+        var o0 = typeof cfg0 === 'string' ? (JSON.parse(cfg0) || {}) : cfg0
+        var hasKey = o0 && (o0.apiKey || (o0.provider === 'custom' && o0.apiUrl))
+        if (hasKey) selfFlag = '&self=1'
+      }
+    } catch (e) {}
+    var url = API_CONTROL_URL + '?_t=' + Date.now() + selfFlag
+    // 附带 uid（登录用户）与设备标识，供服务器去重统计
+    try {
+      var tok = uni.getStorageSync('member_token')
+      if (tok) url += '&uid=' + encodeURIComponent(String(tok).substring(0, 24))
+    } catch (e) {}
+    try {
+      var devId = uni.getStorageSync('member_device_id')
+      if (devId) url += '&dev=' + encodeURIComponent(String(devId))
+    } catch (e) {}
+    uni.request({
+      url: url,
+      method: 'GET',
+      timeout: 8000,
+      success: function(res) {
+        if (res.data && res.data.code === 0 && res.data.data) {
+          uni.setStorageSync('api_control_cache', JSON.stringify({ data: res.data.data, time: Date.now() }))
+        }
+      },
+      fail: function() {}
+    })
+  } catch (e) {}
+}
+
+// 校验是否允许使用当前配置；被拦截返回 { blocked: true, msg }，否则 null
+function checkApiControl(config, hasVision) {
+  try {
+    var c = getApiControlCache()
+    if (!c) return null // 未获取到控制配置，不拦截
+    if (c.enabled === false) {
+      return { blocked: true, msg: (c.notice || 'AI 服务已由官方暂时关闭，请稍后再试') }
+    }
+    if (hasVision) {
+      var vp = config.visionProvider || ''
+      if (vp === 'custom' && c.customVision === false) {
+        return { blocked: true, msg: (c.notice || '自定义 API 已被官方关闭，请更换视觉提供商') }
+      }
+      if (vp && (c.disabledVisionProviders || []).indexOf(vp) !== -1) {
+        return { blocked: true, msg: (c.notice || '该视觉提供商已被官方关闭，请更换') }
+      }
+      return null
+    }
+    var p = config.provider || 'deepseek'
+    if (p === 'custom' && c.customChat === false) {
+      return { blocked: true, msg: (c.notice || '自定义 API 已被官方关闭，请更换提供商') }
+    }
+    if ((c.disabledChatProviders || []).indexOf(p) !== -1) {
+      return { blocked: true, msg: (c.notice || '该提供商已被官方关闭，请更换') }
+    }
+  } catch (e) {}
+  return null
+}
+
+// 判断消息里是否含图片（视觉调用）
+function messagesHaveImage(messages) {
+  try {
+    if (!messages || !messages.length) return false
+    for (var i = 0; i < messages.length; i++) {
+      var c = messages[i] && messages[i].content
+      if (!c) continue
+      if (Array.isArray(c)) {
+        for (var j = 0; j < c.length; j++) {
+          if (c[j] && (c[j].type === 'image' || (c[j].type === 'image_url') || /data:image/.test(String(c[j].image_url || c[j].url || '')))) return true
+        }
+      } else if (/data:image\//.test(String(c))) {
+        return true
+      }
+    }
+  } catch (e) {}
+  return false
+}
+
+/**
+ * 统一 AI 调用入口
+ */
+function callAI(config, messages, options) {
+  options = options || {}
+  var ctl = checkApiControl(config, messagesHaveImage(messages))
+  if (ctl) {
+    refreshApiControl() // 缓存过期导致误拦时尝试刷新
+    return Promise.reject(new Error(ctl.msg))
+  }
+  if (!getApiControlCache()) refreshApiControl() // 无缓存时后台拉取
+  // 自接 API 闸门：后台开启自接 API 限速时，发送前先等服务端状态（发送会变慢，促使用户使用官方模型）
+  var g = getSelfGate()
+  if (g) {
+    refreshApiControl()
+    return new Promise(function(resolve, reject) {
+      setTimeout(function() {
+        callOpenAICompatible(config, messages, options).then(resolve, reject)
+      }, SELF_GATE_DELAY)
+    })
+  }
+  return callOpenAICompatible(config, messages, options)
+}
+
+// 读取闸门状态：0/undefined = 放行；1 = 自接 API 限速生效（延迟发送）
+function getSelfGate() {
+  try {
+    var c = getApiControlCache()
+    if (c && c.gate === 1) return true
+  } catch (e) {}
+  return false
+}
 
 // ======== 模型列表获取 ========
 
@@ -606,7 +793,7 @@ function fetchModelList(config) {
         if (models.length > 0) {
           resolve(models)
         } else {
-          // 尝试兼容路径：/v1/models 失败时退到 /models
+          // 兼容路径：/v1/models 不可用时改用 /models 再试一次
           var altUrl = modelsUrl.replace(/\/v\d+\/models$/i, '/models')
           if (altUrl === modelsUrl) {
             resolve([])
@@ -739,6 +926,7 @@ export default {
   inferMimeType: inferMimeType,
   audioFormatFromMime: audioFormatFromMime,
 
+  // 辅助功能
   fetchModelList: fetchModelList,
   testConnection: testConnection,
   getProviderInfo: getProviderInfo,

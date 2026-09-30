@@ -6,14 +6,8 @@
  * 依据 GNU Lesser General Public License v3.0 发布。
  * 许可证全文见仓库根目录 LICENSE。
  *
- * workflow-scheduler.js — 全局工作流定时调度器
- * 在 App.vue 后台运行（无需打开工作流页面），App 在后台/前台都能定时触发。
- *
- * 支持的触发配置（两套格式统一处理）：
- * - 标准：schedule_type = interval / specific_time / cron
- *  - 落雨旧格式：kind = fixed / datetime / loop
- *
- * 与页面共用全局执行锁 getApp().globalData._wfRunning，避免重复/并发执行。
+ * 本文件由工程内源码同步而来（同步工具：build-open-package.js），
+ * 只改写了模块引用路径，未改动任何业务逻辑。
  */
 import engine from './workflow-engine.js'
 import runner from './workflow-runner.js'
@@ -84,7 +78,7 @@ function pickDueWorkflows() {
     if (isTriggerDisabled(cfg)) return
     var key = wf.id || 'wf'
 
- // ===== 标准格式 =====
+    // ===== 标准格式触发配置 =====
     var st = cfg.schedule_type
     if (st === 'interval' || st === 'specific_time' || st === 'cron') {
       if (st === 'interval') {

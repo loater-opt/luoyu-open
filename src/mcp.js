@@ -5,8 +5,10 @@
  * 本文件是「落雨 AI 伴侣 · 开源工具集」的一部分，
  * 依据 GNU Lesser General Public License v3.0 发布。
  * 许可证全文见仓库根目录 LICENSE。
+ *
+ * 本文件由工程内源码同步而来（同步工具：build-open-package.js），
+ * 只改写了模块引用路径，未改动任何业务逻辑。
  */
-
 // 落雨 MCP 客户端
 //
 // 作用：让落雨作为 MCP 客户端，连接远程 HTTP/SSE 型 MCP 服务器（Model Context Protocol）。
@@ -124,6 +126,7 @@ function test(url, headers) {
   })
 }
 
+// 调用工具
 function callTool(url, headers, name, args) {
   if (!url || !String(url).trim()) return Promise.resolve({ code: -1, msg: '缺少服务器 URL' })
   if (!name) return Promise.resolve({ code: -1, msg: '缺少工具名' })

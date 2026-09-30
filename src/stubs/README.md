@@ -45,6 +45,36 @@
 
 工作流中对应 `jealousy_patrol` 动作节点。使用方可自行实现，或直接删除该节点。
 
+### `message-center.js` — 消息中心
+
+宿主自有模块（AI 主动消息 / 推送消息 / 微信消息的落盘与展示），不在开源范围内。
+
+工作流里「发送系统通知」动作成功后会调用它的 `addAiActiveMessage(kind, title, content, type)`，
+整段包在 try/catch 里，所以本桩给空实现即可，缺了也不影响工作流执行。
+
+| 成员 | 说明 |
+|---|---|
+| `addAiActiveMessage(kind, title, content, type)` | 新增一条 AI 主动消息 |
+| `getAiActiveMessages()` | 读取 AI 主动消息 |
+| `addPushMessage(...)` / `getPushMessages()` | 推送消息 |
+| `setWechatStatus(...)` / `getWechatStatus()` | 微信渠道状态 |
+| `addWechatMessage(...)` / `getWechatMessages()` | 微信消息 |
+
+### `server-config.js` — 服务端地址与功能开关
+
+宿主自有模块，保存服务器地址、静态资源地址与各功能的开关状态，不在开源范围内。
+
+本桩**所有地址返回空串**（表示"不启用服务端接口"）。这样依赖它的 `api-adapter.js`
+会自动走「取不到服务端下发的配置就不拦截请求」的降级分支，**不需要改任何业务代码**。
+
+使用方若需要真正的服务端接口，把 `apiUrl(path)` 等方法改成返回自己的地址即可。
+
+### `api-control.js` — 配置校验接口（历史遗留桩）
+
+早期版本里 `api-adapter.js` 直接依赖这个模块做「服务端下发配置校验」。
+现在的 `api-adapter.js` 改为通过 `server-config.js` 取地址后自行请求，
+所以本文件已不被引用，仅为兼容早期的使用者保留。新代码请用 `server-config.js`。
+
 ---
 
 ## 使用方如何接入
@@ -77,6 +107,8 @@ export default {
 - **桩文件不构成本仓库开源范围的一部分**，它们只是接口描述。
 - 宿主中的真实实现**不受 LGPL-3.0 约束**（不属于本仓库分发的作品）。
 - 如果你实现了这些接口并希望回馈社区，欢迎按 [CONTRIBUTING.md](../CONTRIBUTING.md) 提交。
+- **独立加载验证**：仓库自带 `test-open-package.js`，会在临时目录里真实加载
+  `src/index.js` 并跑一遍最小工作流，确保"拿到就能跑"。
 
 ---
 

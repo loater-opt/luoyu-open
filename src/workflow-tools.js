@@ -6,9 +6,8 @@
  * 依据 GNU Lesser General Public License v3.0 发布。
  * 许可证全文见仓库根目录 LICENSE。
  *
- * workflow-tools.js — 对话中的工作流工具（AI 通过 ToolCall 调用）
- *
- * 提供工作流的创建、编辑、启停、删除等管理工具，由 AI 在对话中按需调用。
+ * 本文件由工程内源码同步而来（同步工具：build-open-package.js），
+ * 只改写了模块引用路径，未改动任何业务逻辑。
  */
 import engine from './workflow-engine.js'
 import runner from './workflow-runner.js'
@@ -149,7 +148,7 @@ function normalizeNodes(nodes) {
     if (n.type === 'trigger') {
       if (!n.triggerType) n.triggerType = 'manual'
       if (!n.triggerConfig || typeof n.triggerConfig !== 'object') n.triggerConfig = {}
- // 对齐 标准字段
+      // 触发配置字段（工作流数据的对外格式）
       var tc = n.triggerConfig
       if (!tc.schedule_type) tc.schedule_type = 'interval'
       if (!tc.interval_ms) tc.interval_ms = '900000'
@@ -167,7 +166,7 @@ function normalizeNodes(nodes) {
     if (n.type === 'execute') {
       if (!n.actionConfig || typeof n.actionConfig !== 'object') n.actionConfig = {}
       if (!n.jsCode) n.jsCode = ''
- // 操作参数值：兼容 简写格式
+      // 参数取值：兼容 { type, value } 与直接给值的简写
       var cfg = n.actionConfig
       Object.keys(cfg).forEach(function(k) {
         cfg[k] = engine.normalizeParameterValue(cfg[k])
@@ -261,9 +260,10 @@ function createWorkflow(args) {
     nodes = [t].concat(nodes)
   }
 
+  // 环检测
   var graph = engine.buildDependencyGraph({ nodes: nodes, connections: connections })
   if (engine.detectCycle(graph.adjacencyList, nodes)) {
-    return { success: false, message: '工作流存在循环依赖，无法创建' }
+    return { success: false, message: '节点连成了环，这个工作流建不起来' }
   }
 
   var wf = {
@@ -279,6 +279,7 @@ function createWorkflow(args) {
   }
 
   var list = loadList()
+  // 同名则覆盖
   var replaced = false
   for (var i = 0; i < list.length; i++) {
     if (list[i].name === name) { list[i] = wf; replaced = true; break }
@@ -286,6 +287,7 @@ function createWorkflow(args) {
   if (!replaced) list.unshift(wf)
   saveList(list)
 
+  // 计算触发描述
   var triggerText = '手动'
   var trigNode = nodes.filter(function(n) { return n.type === 'trigger' })[0]
   if (trigNode && trigNode.triggerType === 'schedule') {
@@ -387,13 +389,14 @@ function updateWorkflow(args) {
   if (args.enabled !== undefined) wf.enabled = args.enabled !== false
   if (args.nodes !== undefined) wf.nodes = normalizeNodes(args.nodes)
   if (args.connections !== undefined) wf.connections = normalizeConnections(args.connections)
+  // 校验
   if (wf.nodes && wf.nodes.length) {
     var idSet = {}
     wf.nodes.forEach(function(n) { idSet[n.id] = true })
     var bad = (wf.connections || []).filter(function(c) { return !idSet[c.sourceNodeId] || !idSet[c.targetNodeId] })
     if (bad.length) return { success: false, message: '存在连线引用了不存在的节点 id' }
     if (engine.detectCycle(engine.buildDependencyGraph(wf).adjacencyList, wf.nodes)) {
-      return { success: false, message: '工作流存在循环依赖，无法更新' }
+      return { success: false, message: '节点连成了环，改动没保存' }
     }
   }
   list[idx] = wf
@@ -468,13 +471,14 @@ function patchWorkflow(args) {
     }
   })
 
+  // 校验
   if (wf.nodes && wf.nodes.length) {
     var idSet2 = {}
     wf.nodes.forEach(function(n) { idSet2[n.id] = true })
     var bad2 = (wf.connections || []).filter(function(c) { return !idSet2[c.sourceNodeId] || !idSet2[c.targetNodeId] })
     if (bad2.length) return { success: false, message: '存在连线引用了不存在的节点 id' }
     if (engine.detectCycle(engine.buildDependencyGraph(wf).adjacencyList, wf.nodes)) {
-      return { success: false, message: '工作流存在循环依赖，无法更新' }
+      return { success: false, message: '节点连成了环，改动没保存' }
     }
   }
 
@@ -508,6 +512,7 @@ function triggerWorkflow(args) {
     }
     var stepRunner = runner.buildStepRunner()
     engine.executeWorkflow(wf, { stepRunner: stepRunner }).then(function(result) {
+      // 更新统计
       wf.stats = wf.stats || {}
       wf.stats.total = (wf.stats.total || 0) + 1
       if (result.success) {

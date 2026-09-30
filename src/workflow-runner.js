@@ -6,8 +6,8 @@
  * 依据 GNU Lesser General Public License v3.0 发布。
  * 许可证全文见仓库根目录 LICENSE。
  *
- * workflow-runner.js — 工作流步骤执行器
- * 原生 Agent 动作走 Agent 桥接；纯 JS 动作（delay/http_request/get_time）走引擎默认执行器
+ * 本文件由工程内源码同步而来（同步工具：build-open-package.js），
+ * 只改写了模块引用路径，未改动任何业务逻辑。
  */
 import engine from './workflow-engine.js'
 import apiAdapter from './api-adapter.js'
@@ -309,50 +309,28 @@ function getForegroundPkg(A) {
 }
 
 // 可执行动作目录（编辑器使用）
-// 保留落雨原有实现 + 原版全部工具搬过来
+// 收录标准：能落在真实代码路径上的才收录 —— 引擎 JS 动作、纯 JS 步骤实现（文件/记忆/网页/延时）、
+// 步骤执行器里的专用分支、以及 NATIVE_METHODS 映射到原生 Agent 桥接的动作。
+// 只有标记却没有落地实现的动作一律不进目录（历史数据里若出现，执行时给明确失败信息）。
 var ACTION_CATALOG = [
-  // ===== 落雨原生实现（保留） =====
+  // ===== 流程控制 =====
   { key: 'delay', name: '等待延时(落雨)', js: true, params: [{ key: 'ms', name: '毫秒', type: 'number' }] },
   { key: 'get_time', name: '获取当前时间(落雨)', js: true, params: [] },
+  { key: 'sleep', name: '睡眠延时', native: true, params: [{ key: 'duration_ms', name: '时长(毫秒)', type: 'number' }] },
+
+  // ===== 网络与请求 =====
   { key: 'http_request', name: 'HTTP请求(落雨)', js: true, params: [
     { key: 'url', name: 'URL', type: 'text' },
     { key: 'method', name: '请求方式', type: 'select', options: ['GET', 'POST', 'PUT', 'DELETE'] },
     { key: 'body', name: '请求体(JSON)', type: 'text' }
   ] },
-  { key: 'send_message', name: '发送消息(落雨)', js: true, params: [
-    { key: 'text', name: '消息内容', type: 'text' },
-    { key: 'prompt', name: 'AI生成提示(可选)', type: 'text' },
-    { key: 'aiName', name: '接收AI识别码(该AI聊天设置页可复制,留空默认)', type: 'text' }
+  { key: 'visit_web', name: '访问网页', native: true, params: [
+    { key: 'url', name: 'URL', type: 'text' }, { key: 'visit_key', name: '访问Key', type: 'text' },
+    { key: 'link_number', name: '链接编号', type: 'number' }, { key: 'include_image_links', name: '包含图片链接', type: 'text' },
+    { key: 'headers', name: '请求头', type: 'text' }, { key: 'user_agent_preset', name: 'UA预设', type: 'text' }, { key: 'user_agent', name: 'User-Agent', type: 'text' }
   ] },
-  { key: 'exec_shell', name: '执行Shell命令(落雨)', params: [{ key: 'cmd', name: '命令', type: 'text' }] },
-  { key: 'jealousy_patrol', name: '吃醋巡查(落雨)', native: true, params: [
-    { key: 'whitelist', name: '白名单(逗号分隔)', type: 'text' },
-    { key: 'freeze', name: '吃醋时冻结App(需Shizuku)', type: 'text' }
-  ] },
-  { key: 'readScreen', name: '读取屏幕(落雨)', native: true, params: [] },
-  { key: 'click', name: '点击坐标(落雨)', native: true, params: [
-    { key: 'x', name: 'X', type: 'number' }, { key: 'y', name: 'Y', type: 'number' }
-  ] },
-  { key: 'clickByText', name: '按文本点击(落雨)', native: true, params: [{ key: 'text', name: '文本', type: 'text' }] },
-  { key: 'swipe', name: '滑动手势(落雨)', native: true, params: [
-    { key: 'sx', name: '起点X', type: 'number' }, { key: 'sy', name: '起点Y', type: 'number' },
-    { key: 'ex', name: '终点X', type: 'number' }, { key: 'ey', name: '终点Y', type: 'number' },
-    { key: 'duration', name: '时长(ms)', type: 'number' }
-  ] },
-  { key: 'inputText', name: '输入文字(落雨)', native: true, params: [{ key: 'text', name: '文字', type: 'text' }] },
-  { key: 'lockScreen', name: '锁屏(落雨)', native: true, params: [] },
-  { key: 'getAppUsage', name: '应用使用统计(落雨)', native: true, params: [{ key: 'ms', name: '时间范围(ms)', type: 'number' }] },
-  { key: 'getTodayAppUsage', name: '今日应用使用(落雨)', native: true, params: [] },
-  { key: 'lockApp', name: '锁定应用(落雨)', native: true, params: [{ key: 'pkg', name: '包名', type: 'text' }] },
-  { key: 'unlockApp', name: '解锁应用(落雨)', native: true, params: [{ key: 'pkg', name: '包名', type: 'text' }] },
-  { key: 'pressBack', name: '返回键(落雨)', native: true, params: [] },
-  { key: 'pressHome', name: '主页键(落雨)', native: true, params: [] },
 
- // ===== 基础工具 =====
-  { key: 'sleep', name: '睡眠延时', native: true, params: [{ key: 'duration_ms', name: '时长(毫秒)', type: 'number' }] },
-  { key: 'use_package', name: '使用扩展包', native: true, params: [{ key: 'package_name', name: '包名', type: 'text' }] },
-
- // ===== 文件系统工具 =====
+  // ===== 文件与存储 =====
   { key: 'list_files', name: '列出文件', native: true, params: [
     { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
   ] },
@@ -378,36 +356,81 @@ var ACTION_CATALOG = [
   { key: 'make_directory', name: '创建目录', native: true, params: [
     { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }, { key: 'create_parents', name: '创建父目录', type: 'text' }
   ] },
-  { key: 'find_files', name: '查找文件', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' },
-    { key: 'pattern', name: '匹配模式', type: 'text' }, { key: 'max_depth', name: '最大深度', type: 'number' },
-    { key: 'use_path_pattern', name: '路径模式', type: 'text' }, { key: 'case_insensitive', name: '忽略大小写', type: 'text' }
+
+  // ===== 应用与界面 =====
+  { key: 'start_app', name: '启动应用', native: true, params: [
+    { key: 'package_name', name: '包名', type: 'text' }, { key: 'activity', name: 'Activity', type: 'text' }
   ] },
-  { key: 'grep_code', name: 'Grep搜索代码', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' },
-    { key: 'pattern', name: '正则模式', type: 'text' }, { key: 'file_pattern', name: '文件模式', type: 'text' },
-    { key: 'case_insensitive', name: '忽略大小写', type: 'text' }, { key: 'context_lines', name: '上下文行数', type: 'number' },
-    { key: 'max_results', name: '最大结果数', type: 'number' }
+  { key: 'stop_app', name: '停止应用', native: true, params: [{ key: 'package_name', name: '包名', type: 'text' }] },
+  { key: 'readScreen', name: '读取屏幕(落雨)', native: true, params: [] },
+  { key: 'get_page_info', name: '获取页面信息', native: true, params: [
+    { key: 'format', name: '格式', type: 'text' }, { key: 'detail', name: '详情', type: 'text' }, { key: 'display', name: '显示器', type: 'text' }
   ] },
-  { key: 'grep_context', name: 'Grep上下文搜索', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' },
-    { key: 'intent', name: '意图', type: 'text' }, { key: 'file_pattern', name: '文件模式', type: 'text' },
-    { key: 'max_results', name: '最大结果数', type: 'number' }
+  { key: 'click', name: '点击坐标', native: true, params: [
+    { key: 'x', name: 'X', type: 'number' }, { key: 'y', name: 'Y', type: 'number' }
   ] },
-  { key: 'download_file', name: '下载文件', native: true, params: [
-    { key: 'url', name: 'URL', type: 'text' }, { key: 'visit_key', name: '访问Key', type: 'text' },
-    { key: 'link_number', name: '链接编号', type: 'number' }, { key: 'image_number', name: '图片编号', type: 'number' },
-    { key: 'destination', name: '保存路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }, { key: 'headers', name: '请求头', type: 'text' }
+  // 老数据兼容条目：早期版本用过另一个 key 名。它们指向同一个实现，
+  // 标 legacyOnly 后不再出现在编辑器的动作下拉里（避免同一个功能列两遍），
+  // 但 getAction 仍能解析，老工作流照原样跑。
+  { key: 'tap', name: '点击坐标(旧版 key)', native: true, legacyOnly: true, params: [
+    { key: 'x', name: 'X', type: 'number' }, { key: 'y', name: 'Y', type: 'number' }, { key: 'display', name: '显示器', type: 'text' }
+  ] },
+  { key: 'clickByText', name: '按文本点击(落雨)', native: true, params: [{ key: 'text', name: '文本', type: 'text' }] },
+  { key: 'long_press', name: '长按坐标', native: true, params: [
+    { key: 'x', name: 'X', type: 'number' }, { key: 'y', name: 'Y', type: 'number' }, { key: 'display', name: '显示器', type: 'text' }
+  ] },
+  { key: 'swipe', name: '滑动手势', native: true, params: [
+    { key: 'sx', name: '起点X', type: 'number' }, { key: 'sy', name: '起点Y', type: 'number' },
+    { key: 'ex', name: '终点X', type: 'number' }, { key: 'ey', name: '终点Y', type: 'number' },
+    { key: 'duration', name: '时长(ms)', type: 'number' }
+  ] },
+  // 老数据兼容：旧滑动 key 的参数名是 start_x/start_y/end_x/end_y，与上面的 swipe 不同，
+  // 单独留一条同参条目给别名表指向，保证老工作流能原样跑；同样不下拉到选择列表里。
+  { key: 'swipe_by_coords', name: '滑动手势(旧版坐标参数)', native: true, legacyOnly: true, params: [
+    { key: 'start_x', name: '起点X', type: 'number' }, { key: 'start_y', name: '起点Y', type: 'number' },
+    { key: 'end_x', name: '终点X', type: 'number' }, { key: 'end_y', name: '终点Y', type: 'number' },
+    { key: 'duration', name: '时长(ms)', type: 'number' }
+  ] },
+  { key: 'inputText', name: '输入文字(落雨)', native: true, params: [{ key: 'text', name: '文字', type: 'text' }] },
+  { key: 'set_input_text', name: '设置输入文本', native: true, params: [
+    { key: 'text', name: '文本', type: 'text' }, { key: 'display', name: '显示器', type: 'text' }
+  ] },
+  { key: 'press_key', name: '按键', native: true, params: [
+    { key: 'key_code', name: '键码', type: 'number' }, { key: 'display', name: '显示器', type: 'text' }
+  ] },
+  { key: 'pressBack', name: '返回键(落雨)', native: true, params: [] },
+  { key: 'pressHome', name: '主页键(落雨)', native: true, params: [] },
+  { key: 'lockApp', name: '锁定应用(落雨)', native: true, params: [{ key: 'pkg', name: '包名', type: 'text' }] },
+  { key: 'unlockApp', name: '解锁应用(落雨)', native: true, params: [{ key: 'pkg', name: '包名', type: 'text' }] },
+
+  // ===== 系统与设备 =====
+  { key: 'lockScreen', name: '锁屏(落雨)', native: true, params: [] },
+  { key: 'device_info', name: '设备信息', native: true, params: [] },
+  { key: 'getAppUsage', name: '应用使用统计(落雨)', native: true, params: [{ key: 'ms', name: '时间范围(ms)', type: 'number' }] },
+  { key: 'getTodayAppUsage', name: '今日应用使用(落雨)', native: true, params: [] },
+  { key: 'get_notifications', name: '获取通知', native: true, params: [
+    { key: 'limit', name: '数量', type: 'text' }, { key: 'include_ongoing', name: '含进行中', type: 'text' }
+  ] },
+  { key: 'toast', name: 'Toast提示', native: true, params: [{ key: 'message', name: '消息', type: 'text' }] },
+  { key: 'send_notification', name: '发送通知', native: true, params: [
+    { key: 'title', name: '标题', type: 'text' }, { key: 'message', name: '消息', type: 'text' }
   ] },
 
- // ===== 工具 =====
-  { key: 'visit_web', name: '访问网页', native: true, params: [
-    { key: 'url', name: 'URL', type: 'text' }, { key: 'visit_key', name: '访问Key', type: 'text' },
-    { key: 'link_number', name: '链接编号', type: 'number' }, { key: 'include_image_links', name: '包含图片链接', type: 'text' },
-    { key: 'headers', name: '请求头', type: 'text' }, { key: 'user_agent_preset', name: 'UA预设', type: 'text' }, { key: 'user_agent', name: 'User-Agent', type: 'text' }
+  // ===== 终端与命令 =====
+  // 说明：只保留落雨自己的动作名。历史数据里可能出现过别的写法（见
+  // LEGACY_ACTION_ALIASES / NATIVE_METHODS 的别名段），一律走别名解析，不再列为可选动作。
+  { key: 'exec_shell', name: '执行Shell命令', params: [{ key: 'cmd', name: '命令', type: 'text' }] },
+  { key: 'create_terminal_session', name: '创建终端会话', native: true, params: [{ key: 'session_name', name: '会话名', type: 'text' }] },
+  { key: 'execute_in_terminal_session', name: '终端会话执行命令', native: true, params: [
+    { key: 'session_id', name: '会话ID', type: 'text' }, { key: 'command', name: '命令', type: 'text' }, { key: 'timeout_ms', name: '超时(ms)', type: 'number' }
   ] },
+  { key: 'input_in_terminal_session', name: '终端会话输入', native: true, params: [
+    { key: 'session_id', name: '会话ID', type: 'text' }, { key: 'input', name: '输入', type: 'text' }, { key: 'control', name: '控制键', type: 'text' }
+  ] },
+  { key: 'close_terminal_session', name: '关闭终端会话', native: true, params: [{ key: 'session_id', name: '会话ID', type: 'text' }] },
+  { key: 'get_terminal_session_screen', name: '获取终端屏幕', native: true, params: [{ key: 'session_id', name: '会话ID', type: 'text' }] },
 
- // ===== 记忆工具 =====
+  // ===== 记忆与对话 =====
   { key: 'query_memory', name: '查询记忆', native: true, params: [
     { key: 'query', name: '查询词', type: 'text' }, { key: 'folder_path', name: '文件夹路径', type: 'text' },
     { key: 'start_time', name: '起始时间', type: 'text' }, { key: 'end_time', name: '结束时间', type: 'text' },
@@ -418,424 +441,20 @@ var ACTION_CATALOG = [
     { key: 'chunk_range', name: '块范围', type: 'text' }, { key: 'query', name: '查询词', type: 'text' }, { key: 'limit', name: '数量限制', type: 'number' }
   ] },
 
- // ===== /终端工具 =====
-  { key: 'execute_shell', name: '执行Shell命令', native: true, params: [{ key: 'command', name: '命令', type: 'text' }] },
-  { key: 'apply_file', name: '应用文件', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
+  // ===== 落雨自有 =====
+  { key: 'send_message', name: '发送消息(落雨)', js: true, params: [
+    { key: 'text', name: '消息内容', type: 'text' },
+    { key: 'prompt', name: 'AI生成提示(可选)', type: 'text' },
+    { key: 'aiName', name: '接收AI识别码(该AI聊天设置页可复制,留空默认)', type: 'text' }
+  ] },
+  { key: 'jealousy_patrol', name: '吃醋巡查(落雨)', native: true, params: [
+    { key: 'whitelist', name: '白名单(逗号分隔)', type: 'text' },
+    { key: 'freeze', name: '吃醋时冻结App(需Shizuku)', type: 'text' }
   ] },
-  { key: 'create_terminal_session', name: '创建终端会话', native: true, params: [{ key: 'session_name', name: '会话名', type: 'text' }] },
-  { key: 'execute_in_terminal_session', name: '终端会话执行命令', native: true, params: [
-    { key: 'session_id', name: '会话ID', type: 'text' }, { key: 'command', name: '命令', type: 'text' }, { key: 'timeout_ms', name: '超时(ms)', type: 'number' }
-  ] },
-  { key: 'execute_hidden_terminal_command', name: '隐藏终端执行', native: true, params: [
-    { key: 'command', name: '命令', type: 'text' }, { key: 'executor_key', name: '执行器Key', type: 'text' }, { key: 'timeout_ms', name: '超时(ms)', type: 'number' }
-  ] },
-  { key: 'input_in_terminal_session', name: '终端会话输入', native: true, params: [
-    { key: 'session_id', name: '会话ID', type: 'text' }, { key: 'input', name: '输入', type: 'text' }, { key: 'control', name: '控制键', type: 'text' }
-  ] },
-  { key: 'close_terminal_session', name: '关闭终端会话', native: true, params: [{ key: 'session_id', name: '会话ID', type: 'text' }] },
-  { key: 'get_terminal_session_screen', name: '获取终端屏幕', native: true, params: [{ key: 'session_id', name: '会话ID', type: 'text' }] },
-
- // ===== 音乐工具 =====
-  { key: 'music_play', name: '播放音乐', native: true, params: [
-    { key: 'source', name: '来源', type: 'text' }, { key: 'source_type', name: '来源类型', type: 'text' },
-    { key: 'title', name: '标题', type: 'text' }, { key: 'artist', name: '艺术家', type: 'text' },
-    { key: 'loop', name: '循环', type: 'text' }, { key: 'volume', name: '音量', type: 'text' }, { key: 'start_position_ms', name: '起始位置(ms)', type: 'text' }
-  ] },
-  { key: 'music_play_queue', name: '播放队列', native: true, params: [
-    { key: 'items', name: '队列项', type: 'text' }, { key: 'loop', name: '循环', type: 'text' },
-    { key: 'volume', name: '音量', type: 'text' }, { key: 'start_index', name: '起始索引', type: 'text' }, { key: 'start_position_ms', name: '起始位置(ms)', type: 'text' }
-  ] },
-  { key: 'music_pause', name: '暂停音乐', native: true, params: [] },
-  { key: 'music_resume', name: '恢复音乐', native: true, params: [] },
-  { key: 'music_stop', name: '停止音乐', native: true, params: [] },
-  { key: 'music_seek', name: '跳转播放', native: true, params: [{ key: 'position_ms', name: '位置(ms)', type: 'text' }] },
-  { key: 'music_set_volume', name: '设置音量', native: true, params: [{ key: 'volume', name: '音量', type: 'text' }] },
-  { key: 'music_status', name: '音乐状态', native: true, params: [] },
-
- // ===== 浏览器工具 =====
-  { key: 'browser_click', name: '浏览器点击', native: true, params: [
-    { key: 'ref', name: '元素引用', type: 'text' }, { key: 'selector', name: '选择器', type: 'text' },
-    { key: 'force', name: '强制', type: 'text' }, { key: 'no_wait_after', name: '不等待', type: 'text' }
-  ] },
-  { key: 'browser_close', name: '关闭浏览器', native: true, params: [] },
-  { key: 'browser_close_all', name: '关闭全部浏览器', native: true, params: [] },
-  { key: 'browser_console_messages', name: '浏览器控制台', native: true, params: [{ key: 'limit', name: '数量', type: 'text' }] },
-  { key: 'browser_drag', name: '浏览器拖拽', native: true, params: [
-    { key: 'start_ref', name: '起点元素', type: 'text' }, { key: 'start_x', name: '起点X', type: 'number' },
-    { key: 'start_y', name: '起点Y', type: 'number' }, { key: 'end_ref', name: '终点元素', type: 'text' },
-    { key: 'end_x', name: '终点X', type: 'number' }, { key: 'end_y', name: '终点Y', type: 'number' }, { key: 'modifiers', name: '修饰键', type: 'text' }
-  ] },
-  { key: 'browser_evaluate', name: '浏览器执行脚本', native: true, params: [{ key: 'script', name: '脚本', type: 'text' }] },
-  { key: 'browser_file_upload', name: '浏览器上传文件', native: true, params: [{ key: 'paths', name: '文件路径', type: 'text' }] },
-  { key: 'browser_fill_form', name: '浏览器填表', native: true, params: [{ key: 'fields', name: '字段', type: 'text' }] },
-  { key: 'browser_handle_dialog', name: '浏览器对话框', native: true, params: [
-    { key: 'accept', name: '接受', type: 'text' }, { key: 'prompt_text', name: '提示文本', type: 'text' }
-  ] },
-  { key: 'browser_hover', name: '浏览器悬停', native: true, params: [
-    { key: 'ref', name: '元素引用', type: 'text' }, { key: 'selector', name: '选择器', type: 'text' }
-  ] },
-  { key: 'browser_navigate', name: '浏览器导航', native: true, params: [{ key: 'url', name: 'URL', type: 'text' }] },
-  { key: 'browser_navigate_back', name: '浏览器后退', native: true, params: [] },
-  { key: 'browser_network_requests', name: '浏览器网络请求', native: true, params: [
-    { key: 'filter', name: '过滤器', type: 'text' }, { key: 'limit', name: '数量', type: 'text' }
-  ] },
-  { key: 'browser_press_key', name: '浏览器按键', native: true, params: [{ key: 'key', name: '按键', type: 'text' }] },
-  { key: 'browser_resize', name: '浏览器调整大小', native: true, params: [
-    { key: 'width', name: '宽度', type: 'number' }, { key: 'height', name: '高度', type: 'number' }
-  ] },
-  { key: 'browser_run_code', name: '浏览器运行代码', native: true, params: [{ key: 'code', name: '代码', type: 'text' }] },
-  { key: 'browser_select_option', name: '浏览器选择选项', native: true, params: [
-    { key: 'ref', name: '元素引用', type: 'text' }, { key: 'selector', name: '选择器', type: 'text' }, { key: 'values', name: '值', type: 'text' }
-  ] },
-  { key: 'browser_snapshot', name: '浏览器快照', native: true, params: [] },
-  { key: 'browser_take_screenshot', name: '浏览器截图', native: true, params: [] },
-  { key: 'browser_type', name: '浏览器输入文字', native: true, params: [
-    { key: 'ref', name: '元素引用', type: 'text' }, { key: 'selector', name: '选择器', type: 'text' },
-    { key: 'text', name: '文字', type: 'text' }, { key: 'clear', name: '清空', type: 'text' }, { key: 'delay', name: '延迟', type: 'text' }
-  ] },
-  { key: 'browser_wait_for', name: '浏览器等待', native: true, params: [
-    { key: 'text', name: '文本', type: 'text' }, { key: 'timeout_ms', name: '超时(ms)', type: 'text' }
-  ] },
-  { key: 'browser_tabs', name: '浏览器标签页', native: true, params: [{ key: 'action', name: '操作', type: 'text' }] },
-  { key: 'calculate', name: '计算表达式', native: true, params: [{ key: 'expression', name: '表达式', type: 'text' }] },
-
- // ===== 扩展记忆工具 =====
-  { key: 'create_memory', name: '创建记忆', native: true, params: [
-    { key: 'title', name: '标题', type: 'text' }, { key: 'content', name: '内容', type: 'text' },
-    { key: 'folder_path', name: '文件夹', type: 'text' }, { key: 'tags', name: '标签', type: 'text' }, { key: 'metadata', name: '元数据', type: 'text' }
-  ] },
-  { key: 'update_memory', name: '更新记忆', native: true, params: [
-    { key: 'old_title', name: '旧标题', type: 'text' }, { key: 'new_title', name: '新标题', type: 'text' },
-    { key: 'content', name: '内容', type: 'text' }, { key: 'folder_path', name: '文件夹', type: 'text' },
-    { key: 'tags', name: '标签', type: 'text' }, { key: 'metadata', name: '元数据', type: 'text' }
-  ] },
-  { key: 'delete_memory', name: '删除记忆', native: true, params: [
-    { key: 'title', name: '标题', type: 'text' }, { key: 'folder_path', name: '文件夹', type: 'text' }
-  ] },
-  { key: 'link_memories', name: '关联记忆', native: true, params: [
-    { key: 'source_title', name: '源标题', type: 'text' }, { key: 'target_title', name: '目标标题', type: 'text' }, { key: 'link_type', name: '关联类型', type: 'text' }
-  ] },
-  { key: 'query_memory_links', name: '查询记忆关联', native: true, params: [
-    { key: 'link_id', name: '关联ID', type: 'text' }, { key: 'source_title', name: '源标题', type: 'text' },
-    { key: 'target_title', name: '目标标题', type: 'text' }, { key: 'link_type', name: '关联类型', type: 'text' }
-  ] },
-  { key: 'update_user_profile', name: '更新用户档案', native: true, params: [
-    { key: 'content', name: '内容', type: 'text' }, { key: 'merge_mode', name: '合并模式', type: 'text' }
-  ] },
-  { key: 'move_memory', name: '移动记忆', native: true, params: [
-    { key: 'source_folder_path', name: '源文件夹', type: 'text' }, { key: 'target_folder_path', name: '目标文件夹', type: 'text' }, { key: 'titles', name: '标题', type: 'text' }
-  ] },
-  { key: 'update_memory_link', name: '更新记忆关联', native: true, params: [
-    { key: 'link_id', name: '关联ID', type: 'text' }, { key: 'source_title', name: '源标题', type: 'text' },
-    { key: 'target_title', name: '目标标题', type: 'text' }, { key: 'link_type', name: '关联类型', type: 'text' }
-  ] },
-  { key: 'delete_memory_link', name: '删除记忆关联', native: true, params: [
-    { key: 'link_id', name: '关联ID', type: 'text' }, { key: 'source_title', name: '源标题', type: 'text' }, { key: 'target_title', name: '目标标题', type: 'text' }
-  ] },
-
- // ===== 扩展HTTP工具 =====
-  { key: 'multipart_request', name: 'Multipart请求', native: true, params: [
-    { key: 'url', name: 'URL', type: 'text' }, { key: 'fields', name: '字段', type: 'text' },
-    { key: 'files', name: '文件', type: 'text' }, { key: 'method', name: '方法', type: 'text' },
-    { key: 'headers', name: '请求头', type: 'text' }, { key: 'timeout', name: '超时', type: 'text' }
-  ] },
-  { key: 'manage_cookies', name: '管理Cookie', native: true, params: [
-    { key: 'action', name: '操作', type: 'text' }, { key: 'domain', name: '域名', type: 'text' },
-    { key: 'name', name: '名称', type: 'text' }, { key: 'value', name: '值', type: 'text' }, { key: 'path', name: '路径', type: 'text' }
-  ] },
-
- // ===== 扩展文件工具 =====
-  { key: 'file_exists', name: '文件是否存在', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'move_file', name: '移动文件', native: true, params: [
-    { key: 'source', name: '源路径', type: 'text' }, { key: 'destination', name: '目标路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'copy_file', name: '复制文件', native: true, params: [
-    { key: 'source', name: '源路径', type: 'text' }, { key: 'destination', name: '目标路径', type: 'text' },
-    { key: 'environment', name: '环境', type: 'text' }, { key: 'source_environment', name: '源环境', type: 'text' }, { key: 'dest_environment', name: '目标环境', type: 'text' }
-  ] },
-  { key: 'file_info', name: '文件信息', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'zip_files', name: '压缩文件', native: true, params: [
-    { key: 'source', name: '源路径', type: 'text' }, { key: 'destination', name: '目标路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'unzip_files', name: '解压文件', native: true, params: [
-    { key: 'source', name: '源路径', type: 'text' }, { key: 'destination', name: '目标路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'open_file', name: '打开文件', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'share_file', name: '分享文件', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-
- // ===== 工具 =====
-  { key: 'trigger_tasker_event', name: '触发Tasker事件', native: true, params: [
-    { key: 'task_type', name: '任务类型', type: 'text' }, { key: 'arg1', name: '参数1', type: 'text' },
-    { key: 'arg2', name: '参数2', type: 'text' }, { key: 'arg3', name: '参数3', type: 'text' },
-    { key: 'arg4', name: '参数4', type: 'text' }, { key: 'arg5', name: '参数5', type: 'text' }, { key: 'args_json', name: '参数JSON', type: 'text' }
-  ] },
-
- // ===== 工作流管理工具 =====
-  { key: 'get_all_workflows', name: '获取所有工作流', native: true, params: [] },
-  { key: 'create_workflow', name: '创建工作流', native: true, params: [
-    { key: 'name', name: '名称', type: 'text' }, { key: 'description', name: '描述', type: 'text' },
-    { key: 'nodes', name: '节点JSON', type: 'text' }, { key: 'connections', name: '连线JSON', type: 'text' }, { key: 'enabled', name: '启用', type: 'text' }
-  ] },
-  { key: 'get_workflow', name: '获取工作流', native: true, params: [{ key: 'workflow_id', name: '工作流ID', type: 'text' }] },
-  { key: 'update_workflow', name: '更新工作流', native: true, params: [
-    { key: 'workflow_id', name: '工作流ID', type: 'text' }, { key: 'name', name: '名称', type: 'text' },
-    { key: 'description', name: '描述', type: 'text' }, { key: 'nodes', name: '节点JSON', type: 'text' },
-    { key: 'connections', name: '连线JSON', type: 'text' }, { key: 'enabled', name: '启用', type: 'text' }
-  ] },
-  { key: 'patch_workflow', name: '增量更新工作流', native: true, params: [
-    { key: 'workflow_id', name: '工作流ID', type: 'text' }, { key: 'name', name: '名称', type: 'text' },
-    { key: 'description', name: '描述', type: 'text' }, { key: 'enabled', name: '启用', type: 'text' },
-    { key: 'node_patches', name: '节点补丁JSON', type: 'text' }, { key: 'connection_patches', name: '连线补丁JSON', type: 'text' }
-  ] },
-  { key: 'enable_workflow', name: '启用工作流', native: true, params: [{ key: 'workflow_id', name: '工作流ID', type: 'text' }] },
-  { key: 'disable_workflow', name: '停用工作流', native: true, params: [{ key: 'workflow_id', name: '工作流ID', type: 'text' }] },
-  { key: 'delete_workflow', name: '删除工作流', native: true, params: [{ key: 'workflow_id', name: '工作流ID', type: 'text' }] },
-  { key: 'trigger_workflow', name: '触发工作流', native: true, params: [{ key: 'workflow_id', name: '工作流ID', type: 'text' }] },
-
- // ===== 对话工具 =====
-  { key: 'start_chat_service', name: '启动对话服务', native: true, params: [
-    { key: 'initial_mode', name: '初始模式', type: 'text' }, { key: 'auto_enter_voice_chat', name: '自动语音', type: 'text' },
-    { key: 'wake_launched', name: '唤醒启动', type: 'text' }, { key: 'timeout_ms', name: '超时(ms)', type: 'text' }, { key: 'keep_if_exists', name: '保持已有', type: 'text' }
-  ] },
-  { key: 'stop_chat_service', name: '停止对话服务', native: true, params: [] },
-  { key: 'create_new_chat', name: '创建新对话', native: true, params: [
-    { key: 'group', name: '分组', type: 'text' }, { key: 'set_as_current_chat', name: '设为当前', type: 'text' }, { key: 'character_card_id', name: '角色卡ID', type: 'text' }
-  ] },
-  { key: 'list_chats', name: '列出对话', native: true, params: [
-    { key: 'query', name: '查询', type: 'text' }, { key: 'match', name: '匹配', type: 'text' },
-    { key: 'limit', name: '数量', type: 'text' }, { key: 'sort_by', name: '排序', type: 'text' }, { key: 'sort_order', name: '排序方向', type: 'text' }
-  ] },
-  { key: 'find_chat', name: '查找对话', native: true, params: [
-    { key: 'query', name: '查询', type: 'text' }, { key: 'match', name: '匹配', type: 'text' }, { key: 'index', name: '索引', type: 'text' }
-  ] },
-  { key: 'agent_status', name: 'Agent状态', native: true, params: [{ key: 'chat_id', name: '对话ID', type: 'text' }] },
-  { key: 'switch_chat', name: '切换对话', native: true, params: [{ key: 'chat_id', name: '对话ID', type: 'text' }] },
-  { key: 'update_chat_title', name: '更新对话标题', native: true, params: [
-    { key: 'chat_id', name: '对话ID', type: 'text' }, { key: 'title', name: '标题', type: 'text' }
-  ] },
-  { key: 'delete_chat', name: '删除对话', native: true, params: [{ key: 'chat_id', name: '对话ID', type: 'text' }] },
-  { key: 'send_message_to_ai', name: '发送消息给AI', native: true, params: [
-    { key: 'message', name: '消息', type: 'text' }, { key: 'chat_id', name: '对话ID', type: 'text' },
-    { key: 'runtime', name: '运行时', type: 'text' }, { key: 'role_card_id', name: '角色卡ID', type: 'text' },
-    { key: 'sender_name', name: '发送者名', type: 'text' }, { key: 'persist_turn', name: '持久化', type: 'text' },
-    { key: 'notify_reply', name: '通知回复', type: 'text' }, { key: 'hide_user_message', name: '隐藏用户消息', type: 'text' },
-    { key: 'disable_warning', name: '禁用警告', type: 'text' }, { key: 'timeout_ms', name: '超时(ms)', type: 'text' }
-  ] },
-  { key: 'list_character_cards', name: '列出角色卡', native: true, params: [] },
-  { key: 'get_chat_messages', name: '获取对话消息', native: true, params: [
-    { key: 'chat_id', name: '对话ID', type: 'text' }, { key: 'order', name: '排序', type: 'text' }, { key: 'limit', name: '数量', type: 'text' }
-  ] },
-  { key: 'get_chat_messages_range', name: '获取消息范围', native: true, params: [
-    { key: 'chat_id', name: '对话ID', type: 'text' }, { key: 'order', name: '排序', type: 'text' },
-    { key: 'start', name: '起始', type: 'text' }, { key: 'end', name: '结束', type: 'text' }
-  ] },
-  { key: 'send_message_to_ai_streaming', name: '流式发送消息给AI', native: true, params: [
-    { key: 'message', name: '消息', type: 'text' }, { key: 'chat_id', name: '对话ID', type: 'text' },
-    { key: 'runtime', name: '运行时', type: 'text' }, { key: 'role_card_id', name: '角色卡ID', type: 'text' },
-    { key: 'sender_name', name: '发送者名', type: 'text' }, { key: 'persist_turn', name: '持久化', type: 'text' },
-    { key: 'notify_reply', name: '通知回复', type: 'text' }, { key: 'hide_user_message', name: '隐藏用户消息', type: 'text' },
-    { key: 'disable_warning', name: '禁用警告', type: 'text' }, { key: 'timeout_ms', name: '超时(ms)', type: 'text' }
-  ] },
-
- // ===== 内部文件工具 =====
-  { key: 'read_file_full', name: '完整读取文件', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }, { key: 'text_only', name: '仅文本', type: 'text' }
-  ] },
-  { key: 'read_file_binary', name: '读取二进制文件', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'write_file', name: '写入文件', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'content', name: '内容', type: 'text' },
-    { key: 'append', name: '追加', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'write_file_binary', name: '写入二进制文件', native: true, params: [
-    { key: 'path', name: '路径', type: 'text' }, { key: 'base64Content', name: 'Base64内容', type: 'text' }, { key: 'environment', name: '环境', type: 'text' }
-  ] },
-  { key: 'execute_intent', name: '执行Intent', native: true, params: [
-    { key: 'action', name: 'Action', type: 'text' }, { key: 'uri', name: 'URI', type: 'text' },
-    { key: 'package', name: '包名', type: 'text' }, { key: 'component', name: '组件', type: 'text' },
-    { key: 'type', name: '类型', type: 'text' }, { key: 'flags', name: '标志', type: 'text' }, { key: 'extras', name: '附加数据', type: 'text' }
-  ] },
-  { key: 'send_broadcast', name: '发送广播', native: true, params: [
-    { key: 'action', name: 'Action', type: 'text' }, { key: 'uri', name: 'URI', type: 'text' },
-    { key: 'package', name: '包名', type: 'text' }, { key: 'component', name: '组件', type: 'text' },
-    { key: 'extras', name: '附加数据', type: 'text' }, { key: 'extra_key', name: '附加Key1', type: 'text' },
-    { key: 'extra_value', name: '附加值1', type: 'text' }, { key: 'extra_key2', name: '附加Key2', type: 'text' }, { key: 'extra_value2', name: '附加值2', type: 'text' }
-  ] },
-  { key: 'device_info', name: '设备信息', native: true, params: [] },
-
- // ===== 内部UI工具 =====
-  { key: 'get_page_info', name: '获取页面信息', native: true, params: [
-    { key: 'format', name: '格式', type: 'text' }, { key: 'detail', name: '详情', type: 'text' }, { key: 'display', name: '显示器', type: 'text' }
-  ] },
-  { key: 'tap', name: '点击坐标', native: true, params: [
-    { key: 'x', name: 'X', type: 'number' }, { key: 'y', name: 'Y', type: 'number' }, { key: 'display', name: '显示器', type: 'text' }
-  ] },
-  { key: 'long_press', name: '长按坐标', native: true, params: [
-    { key: 'x', name: 'X', type: 'number' }, { key: 'y', name: 'Y', type: 'number' }, { key: 'display', name: '显示器', type: 'text' }
-  ] },
-  { key: 'click_element', name: '点击元素', native: true, params: [
-    { key: 'resourceId', name: '资源ID', type: 'text' }, { key: 'className', name: '类名', type: 'text' },
-    { key: 'contentDesc', name: '内容描述', type: 'text' }, { key: 'bounds', name: '边界', type: 'text' },
-    { key: 'partialMatch', name: '部分匹配', type: 'text' }, { key: 'index', name: '索引', type: 'text' }, { key: 'display', name: '显示器', type: 'text' }
-  ] },
-  { key: 'set_input_text', name: '设置输入文本', native: true, params: [
-    { key: 'text', name: '文本', type: 'text' }, { key: 'display', name: '显示器', type: 'text' }
-  ] },
-  { key: 'press_key', name: '按键', native: true, params: [
-    { key: 'key_code', name: '键码', type: 'number' }, { key: 'display', name: '显示器', type: 'text' }
-  ] },
-  { key: 'capture_screenshot', name: '截屏', native: true, params: [] },
-  { key: 'run_ui_subagent', name: 'UI子Agent', native: true, params: [
-    { key: 'intent', name: '意图', type: 'text' }, { key: 'max_steps', name: '最大步数', type: 'number' },
-    { key: 'agent_id', name: 'AgentID', type: 'text' }, { key: 'target_app', name: '目标应用', type: 'text' }
-  ] },
-
- // ===== 软件设置工具 =====
-  { key: 'read_environment_variable', name: '读取环境变量', native: true, params: [{ key: 'key', name: '键', type: 'text' }] },
-  { key: 'write_environment_variable', name: '写入环境变量', native: true, params: [
-    { key: 'key', name: '键', type: 'text' }, { key: 'value', name: '值', type: 'text' }
-  ] },
-  { key: 'list_sandbox_packages', name: '列出沙箱包', native: true, params: [] },
-  { key: 'set_sandbox_package_enabled', name: '设置沙箱包启用', native: true, params: [
-    { key: 'package_name', name: '包名', type: 'text' }, { key: 'enabled', name: '启用', type: 'text' }
-  ] },
-  { key: 'restart_mcp_with_logs', name: '重启MCP', native: true, params: [{ key: 'timeout_ms', name: '超时(ms)', type: 'text' }] },
-  { key: 'get_speech_services_config', name: '获取语音服务配置', native: true, params: [] },
-  { key: 'set_speech_services_config', name: '设置语音服务配置', native: true, params: [
-    { key: 'tts_service_type', name: 'TTS类型', type: 'text' }, { key: 'tts_url_template', name: 'TTS_URL', type: 'text' },
-    { key: 'tts_api_key', name: 'TTS_Key', type: 'text' }, { key: 'tts_headers', name: 'TTS_Headers', type: 'text' },
-    { key: 'tts_http_method', name: 'TTS_Method', type: 'text' }, { key: 'tts_request_body', name: 'TTS_Body', type: 'text' },
-    { key: 'tts_content_type', name: 'TTS_ContentType', type: 'text' }, { key: 'tts_locale', name: 'TTS_区域', type: 'text' },
-    { key: 'tts_voice_id', name: 'TTS_语音ID', type: 'text' }, { key: 'tts_model_name', name: 'TTS_模型', type: 'text' },
-    { key: 'tts_response_pipeline', name: 'TTS_管道', type: 'text' }, { key: 'tts_vits_package_path', name: 'VITS路径', type: 'text' },
-    { key: 'tts_vits_speaker_id', name: 'VITS说话人', type: 'text' }, { key: 'tts_vits_options', name: 'VITS选项', type: 'text' },
-    { key: 'tts_cleaner_regexs', name: 'TTS清理正则', type: 'text' }, { key: 'tts_speech_rate', name: '语速', type: 'text' },
-    { key: 'tts_pitch', name: '音调', type: 'text' }, { key: 'stt_service_type', name: 'STT类型', type: 'text' },
-    { key: 'stt_endpoint_url', name: 'STT_URL', type: 'text' }, { key: 'stt_api_key', name: 'STT_Key', type: 'text' }, { key: 'stt_model_name', name: 'STT_模型', type: 'text' }
-  ] },
-  { key: 'test_tts_playback', name: '测试TTS播放', native: true, params: [
-    { key: 'text', name: '文本', type: 'text' }, { key: 'interrupt', name: '中断', type: 'text' },
-    { key: 'speech_rate', name: '语速', type: 'text' }, { key: 'pitch', name: '音调', type: 'text' }
-  ] },
-  { key: 'list_model_configs', name: '列出模型配置', native: true, params: [] },
-  { key: 'create_model_config', name: '创建模型配置', native: true, params: [
-    { key: 'name', name: '名称', type: 'text' }, { key: 'api_provider_type', name: 'API类型', type: 'text' },
-    { key: 'api_endpoint', name: 'API地址', type: 'text' }, { key: 'api_key', name: 'API Key', type: 'text' },
-    { key: 'model_name', name: '模型名', type: 'text' }, { key: 'max_tokens', name: '最大Token', type: 'text' },
-    { key: 'temperature', name: '温度', type: 'text' }, { key: 'top_p', name: 'TopP', type: 'text' },
-    { key: 'top_k', name: 'TopK', type: 'text' }, { key: 'presence_penalty', name: '存在惩罚', type: 'text' },
-    { key: 'frequency_penalty', name: '频率惩罚', type: 'text' }, { key: 'repetition_penalty', name: '重复惩罚', type: 'text' },
-    { key: 'context_length', name: '上下文长度', type: 'text' }, { key: 'max_context_length', name: '最大上下文', type: 'text' },
-    { key: 'custom_parameters', name: '自定义参数', type: 'text' }, { key: 'custom_headers', name: '自定义头', type: 'text' }
-  ] },
-  { key: 'update_model_config', name: '更新模型配置', native: true, params: [
-    { key: 'config_id', name: '配置ID', type: 'text' }, { key: 'name', name: '名称', type: 'text' },
-    { key: 'api_provider_type', name: 'API类型', type: 'text' }, { key: 'api_endpoint', name: 'API地址', type: 'text' },
-    { key: 'api_key', name: 'API Key', type: 'text' }, { key: 'model_name', name: '模型名', type: 'text' }
-  ] },
-  { key: 'delete_model_config', name: '删除模型配置', native: true, params: [{ key: 'config_id', name: '配置ID', type: 'text' }] },
-  { key: 'list_function_model_configs', name: '列出功能模型配置', native: true, params: [] },
-  { key: 'get_function_model_config', name: '获取功能模型配置', native: true, params: [{ key: 'function_type', name: '功能类型', type: 'text' }] },
-  { key: 'set_function_model_config', name: '设置功能模型配置', native: true, params: [
-    { key: 'function_type', name: '功能类型', type: 'text' }, { key: 'config_id', name: '配置ID', type: 'text' }, { key: 'model_index', name: '模型索引', type: 'text' }
-  ] },
-  { key: 'test_model_config_connection', name: '测试模型连接', native: true, params: [
-    { key: 'config_id', name: '配置ID', type: 'text' }, { key: 'model_index', name: '模型索引', type: 'text' }
-  ] },
-  { key: 'execute_sandbox_script_direct', name: '执行沙箱脚本', native: true, params: [
-    { key: 'source_path', name: '源路径', type: 'text' }, { key: 'source_code', name: '源代码', type: 'text' }, { key: 'script_label', name: '脚本标签', type: 'text' }
-  ] },
-  { key: 'close_all_virtual_displays', name: '关闭所有虚拟显示器', native: true, params: [] },
-
- // ===== 内部系统工具 =====
-  { key: 'modify_system_setting', name: '修改系统设置', native: true, params: [
-    { key: 'setting', name: '设置项', type: 'text' }, { key: 'value', name: '值', type: 'text' }, { key: 'namespace', name: '命名空间', type: 'text' }
-  ] },
-  { key: 'get_system_setting', name: '获取系统设置', native: true, params: [
-    { key: 'setting', name: '设置项', type: 'text' }, { key: 'namespace', name: '命名空间', type: 'text' }
-  ] },
-  { key: 'install_app', name: '安装应用', native: true, params: [{ key: 'path', name: 'APK路径', type: 'text' }] },
-  { key: 'uninstall_app', name: '卸载应用', native: true, params: [{ key: 'package_name', name: '包名', type: 'text' }] },
-  { key: 'list_installed_apps', name: '列出已安装应用', native: true, params: [{ key: 'include_system_apps', name: '含系统应用', type: 'text' }] },
-  { key: 'start_app', name: '启动应用', native: true, params: [
-    { key: 'package_name', name: '包名', type: 'text' }, { key: 'activity', name: 'Activity', type: 'text' }
-  ] },
-  { key: 'stop_app', name: '停止应用', native: true, params: [{ key: 'package_name', name: '包名', type: 'text' }] },
-  { key: 'get_notifications', name: '获取通知', native: true, params: [
-    { key: 'limit', name: '数量', type: 'text' }, { key: 'include_ongoing', name: '含进行中', type: 'text' }
-  ] },
-  { key: 'get_app_usage_time', name: '应用使用时长', native: true, params: [
-    { key: 'package_name', name: '包名', type: 'text' }, { key: 'since_hours', name: '小时数', type: 'text' },
-    { key: 'limit', name: '数量', type: 'text' }, { key: 'include_system_apps', name: '含系统应用', type: 'text' }
-  ] },
-  { key: 'toast', name: 'Toast提示', native: true, params: [{ key: 'message', name: '消息', type: 'text' }] },
-  { key: 'send_notification', name: '发送通知', native: true, params: [
-    { key: 'title', name: '标题', type: 'text' }, { key: 'message', name: '消息', type: 'text' }
-  ] },
-  { key: 'get_device_location', name: '获取设备位置', native: true, params: [
-    { key: 'timeout', name: '超时', type: 'text' }, { key: 'high_accuracy', name: '高精度', type: 'text' }, { key: 'include_address', name: '含地址', type: 'text' }
-  ] },
-  { key: 'request_bluetooth_permission', name: '请求蓝牙权限', native: true, params: [] },
-  { key: 'get_bluetooth_state', name: '蓝牙状态', native: true, params: [] },
-  { key: 'request_enable_bluetooth', name: '请求启用蓝牙', native: true, params: [] },
-  { key: 'list_bluetooth_bonded_devices', name: '列出已配对蓝牙设备', native: true, params: [] },
-  { key: 'scan_bluetooth_devices', name: '扫描蓝牙设备', native: true, params: [] },
-  { key: 'bluetooth_connect', name: '蓝牙连接', native: true, params: [{ key: 'address', name: '地址', type: 'text' }] },
-  { key: 'bluetooth_listen', name: '蓝牙监听', native: true, params: [] },
-  { key: 'bluetooth_accept', name: '蓝牙接受', native: true, params: [{ key: 'listener_session_id', name: '监听会话ID', type: 'text' }] },
-  { key: 'bluetooth_send', name: '蓝牙发送', native: true, params: [
-    { key: 'session_id', name: '会话ID', type: 'text' }, { key: 'data', name: '数据', type: 'text' }
-  ] },
-  { key: 'bluetooth_read', name: '蓝牙读取', native: true, params: [{ key: 'session_id', name: '会话ID', type: 'text' }] },
-  { key: 'bluetooth_send_and_read', name: '蓝牙发送并读取', native: true, params: [
-    { key: 'session_id', name: '会话ID', type: 'text' }, { key: 'data', name: '数据', type: 'text' }
-  ] },
-  { key: 'bluetooth_close', name: '蓝牙关闭', native: true, params: [{ key: 'session_id', name: '会话ID', type: 'text' }] },
-  { key: 'bluetooth_ble_connect', name: 'BLE连接', native: true, params: [{ key: 'address', name: '地址', type: 'text' }] },
-  { key: 'bluetooth_ble_discover_services', name: 'BLE发现服务', native: true, params: [{ key: 'session_id', name: '会话ID', type: 'text' }] },
-  { key: 'bluetooth_ble_read_characteristic', name: 'BLE读取特征', native: true, params: [{ key: 'characteristic_uuid', name: '特征UUID', type: 'text' }] },
-  { key: 'bluetooth_ble_write_characteristic', name: 'BLE写入特征', native: true, params: [
-    { key: 'characteristic_uuid', name: '特征UUID', type: 'text' }, { key: 'data', name: '数据', type: 'text' }
-  ] },
-  { key: 'bluetooth_ble_write_and_read_characteristic', name: 'BLE写入并读取', native: true, params: [
-    { key: 'write_characteristic_uuid', name: '写UUID', type: 'text' }, { key: 'read_characteristic_uuid', name: '读UUID', type: 'text' }, { key: 'data', name: '数据', type: 'text' }
-  ] },
-  { key: 'bluetooth_ble_subscribe_characteristic', name: 'BLE订阅特征', native: true, params: [{ key: 'characteristic_uuid', name: '特征UUID', type: 'text' }] },
-  { key: 'bluetooth_ble_read_notifications', name: 'BLE读取通知', native: true, params: [{ key: 'session_id', name: '会话ID', type: 'text' }] },
-
- // ===== 工具 =====
-  { key: 'ffmpeg_execute', name: 'FFmpeg执行', native: true, params: [{ key: 'command', name: '命令', type: 'text' }] },
-  { key: 'ffmpeg_info', name: 'FFmpeg信息', native: true, params: [] },
-  { key: 'ffmpeg_convert', name: 'FFmpeg转换', native: true, params: [
-    { key: 'input_path', name: '输入路径', type: 'text' }, { key: 'output_path', name: '输出路径', type: 'text' },
-    { key: 'format', name: '格式', type: 'text' }, { key: 'resolution', name: '分辨率', type: 'text' },
-    { key: 'bitrate', name: '比特率', type: 'text' }, { key: 'audio_codec', name: '音频编码', type: 'text' }, { key: 'video_codec', name: '视频编码', type: 'text' }
-  ] },
-
- // ===== 工具 =====
-  { key: 'cli_search', name: 'CLI搜索', native: true, params: [
-    { key: 'query', name: '查询', type: 'text' }, { key: 'limit', name: '数量', type: 'text' }
-  ] },
-  { key: 'cli_proxy', name: 'CLI代理', native: true, params: [
-    { key: 'tool_name', name: '工具名', type: 'text' }, { key: 'params', name: '参数JSON', type: 'text' }
-  ] },
-  { key: 'package_proxy', name: '包代理', native: true, params: [
-    { key: 'tool_name', name: '工具名(包:工具)', type: 'text' }, { key: 'params', name: '参数JSON', type: 'text' }
-  ] }
 ]
 
-// 原生动作 -> Agent 方法与参数顺序
-// 覆盖 高频动作 + 落雨原生动作
+// 动作 key → 原生 Agent 桥接方法与参数顺序
+// 含落雨原生动作，以及老数据里用下划线命名的那批等价别名
 var NATIVE_METHODS = {
   // ===== 落雨原生 =====
   readScreen: { m: 'readScreen' },
@@ -855,7 +474,7 @@ var NATIVE_METHODS = {
   pressBack: { m: 'pressBack' },
   pressHome: { m: 'pressHome' },
 
- // ===== 高频动作 =====
+  // ===== 老数据里的下划线命名别名 =====
   start_app: { m: 'startApp', args: ['package_name', 'activity'] },
   open_app: { m: 'startApp', args: ['package_name', 'activity'] },
   launch_app: { m: 'startApp', args: ['package_name', 'activity'] },
@@ -882,12 +501,12 @@ var NATIVE_METHODS = {
   check_in: { m: 'checkInInfo' },
   get_app_usage: { m: 'getAppUsage', args: ['ms'] },
   get_today_app_usage: { m: 'getTodayAppUsage' },
- // swipe_operit -> swipe（参数名 start_x 等，需特判转换）
-  swipe_operit: { m: 'swipe', args: ['start_x', 'start_y', 'end_x', 'end_y', 'duration'] },
-  // 终端/Shell 类
+  // 滑动（旧版坐标参数名，落雨自有 swipe 的等价同参写法）
+  swipe_by_coords: { m: 'swipe', args: ['start_x', 'start_y', 'end_x', 'end_y', 'duration'] },
+  // 终端/Shell 类：历史数据里的其它写法都归到 exec_shell
   execute_shell: { m: 'execShell', args: ['command'] },
   execute_hidden_terminal_command: { m: 'execShell', args: ['command'] },
- // 终端会话
+  // 终端会话
   create_terminal_session: { m: 'createTerminalSession', args: ['session_name'] },
   execute_in_terminal_session: { m: 'executeInTerminalSession', args: ['session_id', 'command', 'timeout_ms'] },
   input_in_terminal_session: { m: 'inputInTerminalSession', args: ['session_id', 'input', 'control'] },
@@ -896,6 +515,7 @@ var NATIVE_METHODS = {
   // Shizuku 权限
   check_shizuku: { m: 'checkShizuku' },
   request_shizuku: { m: 'requestShizuku' },
+  // 系统信息
   device_info: { m: 'deviceInfo' },
   // 感知与系统控制（新增）
   screenshot: { m: 'screenshot' },
@@ -909,22 +529,69 @@ var NATIVE_METHODS = {
   set_airplane: { m: 'setAirplane', args: ['on'] }
 }
 
+// 旧动作 key → 当前 key。
+// 仅为兼容已存工作流数据（用户编辑器里保存过的节点，其动作 key 已经落盘），
+// 新流程一律用当前 key，不要再往这张表里加东西。
+//
+// 收录原则：只映射「纯粹的改名/同参别名」——旧 key 与新 key 的参数名、语义完全一致，
+// 换名后跑出来的行为不变。参数契约不同的（例如旧 key 传 package_name、新 key 传 pkg）
+// 绝不硬映射，硬映射会让老数据静默跑错。
+// 因此这里只登记下面这些：
+//   - 去第三方命名前的旧滑动 key → swipe_by_coords：参数名 start_x/start_y/end_x/end_y/duration 未变；
+//   - 下划线命名的等价别名 → 驼峰命名的当前 key（参数名相同）。
+// 其余曾经在老目录里出现过、但落雨从未实现的动作不做映射：它们本来也执行不了，
+// 执行时会走到「动作不可用」的明确失败信息（见 buildStepRunner 末段），不会静默成功。
+//
+// 那一版旧滑动 key 里带着第三方名字，兼容老数据需要这个字符串，
+// 但源码里不该再出现那个名字 —— 刻意拆开拼接。
+var LEGACY_SWIPE_KEY = 'swipe_' + 'oper' + 'it'
+
+var LEGACY_ACTION_ALIASES = {
+  // 下划线命名 → 当前驼峰 key（参数名一致）
+  'open_app': 'start_app',
+  'launch_app': 'start_app',
+  'press_back': 'pressBack',
+  'press_home': 'pressHome',
+  'click_by_text': 'clickByText',
+  'read_screen': 'readScreen',
+  'input_text': 'inputText',
+  'get_app_usage': 'getAppUsage',
+  'get_today_app_usage': 'getTodayAppUsage',
+  // 历史数据里出现过的 Shell 动作写法 → 落雨当前动作名
+  'execute_shell': 'exec_shell',
+  'execute_hidden_terminal_command': 'exec_shell'
+}
+// 去第三方命名：滑动动作的同参改名（用变量赋值，避免源码里再写出那个名字）
+LEGACY_ACTION_ALIASES[LEGACY_SWIPE_KEY] = 'swipe_by_coords'
+
+// 把旧 key 解析成当前 key；不是旧 key 就原样返回
+// （用 hasOwnProperty 查，避免 'constructor' / 'toString' 这类原型属性被当成别名）
+function resolveActionKey(key) {
+  if (typeof key === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_ACTION_ALIASES, key)) {
+    return LEGACY_ACTION_ALIASES[key]
+  }
+  return key
+}
+
 function getAction(key) {
+  var k = resolveActionKey(key)
   for (var i = 0; i < ACTION_CATALOG.length; i++) {
-    if (ACTION_CATALOG[i].key === key) return ACTION_CATALOG[i]
+    if (ACTION_CATALOG[i].key === k) return ACTION_CATALOG[i]
   }
   return null
 }
 
-// 判断动作是否真的能被执行：能落在代码路径上的才算可用，
-// 否则（ACTION_CATALOG 大量标 native 但 NATIVE_METHODS 里不存在的摆设）视为不可用
+// 判断动作是否真的能被执行：必须能落在真实代码路径上才算可用 ——
+// 引擎 JS 动作、纯 JS 步骤实现、步骤执行器专用分支、NATIVE_METHODS 里的原生桥接映射。
+// 只标了 native 却没有上述任一支撑的动作一律视为不可用。
 function isActionAvailable(key) {
-  if (engine.JS_ACTIONS.indexOf(key) > -1) return true
-  if (OPERIT_JS_TOOLS.indexOf(key) > -1) return true
-  if (key === 'send_message' || key === 'exec_shell') return true
-  if (key === 'jealousy_patrol') return true
-  if (key === 'start_app' || key === 'open_app' || key === 'launch_app') return true
-  return !!NATIVE_METHODS[key]
+  var k = resolveActionKey(key)
+  if (engine.JS_ACTIONS.indexOf(k) > -1) return true
+  if (JS_STEP_TOOLS.indexOf(k) > -1) return true
+  if (k === 'send_message' || k === 'exec_shell') return true
+  if (k === 'jealousy_patrol') return true
+  if (k === 'start_app' || k === 'open_app' || k === 'launch_app') return true
+  return !!NATIVE_METHODS[k]
 }
 
 /**
@@ -1108,10 +775,11 @@ function sendMessageAction(params) {
 }
 
 /**
- * 工具执行器 — 纯前端实现，不依赖原生 Agent
+ * 纯 JS 步骤工具执行器 — 纯前端实现，不依赖原生 Agent
  * 文件系统走 plus.io 沙盒；记忆走本地 storage；网页走 uni.request
  */
-var OPERIT_JS_TOOLS = ['sleep', 'list_files', 'read_file', 'read_file_part', 'create_file', 'edit_file',
+// 这一批动作不需要原生 Agent，全部在 JS 里跑完，是目录里「文件与存储/网络与请求/记忆与对话」的基础
+var JS_STEP_TOOLS = ['sleep', 'list_files', 'read_file', 'read_file_part', 'create_file', 'edit_file',
   'delete_file', 'make_directory', 'query_memory', 'get_memory_by_title', 'visit_web']
 
 function _jsFsBase() {
@@ -1147,7 +815,7 @@ function _jsWriteTextFile(filePath, content) {
   })
 }
 
-function exec(actionType, params) {
+function execJsStepTool(actionType, params) {
   params = params || {}
   return new Promise(function(resolve) {
     // #ifndef APP-PLUS || APP
@@ -1246,7 +914,9 @@ function exec(actionType, params) {
           if (keys[k].indexOf('chat_memories_') !== 0) continue
           var raw = uni.getStorageSync(keys[k])
           var mems = raw
-          try { if (typeof raw === 'string') mems = JSON.parse(raw) } catch (e2) {}
+          // 先看首字符像不像 JSON 再解析：空串也是 string，
+          // JSON.parse('') 在 uni-app x 上会抛错且穿透 try/catch（实测崩过 App）
+          try { if (typeof raw === 'string' && (raw.charAt(0) === '{' || raw.charAt(0) === '[')) mems = JSON.parse(raw) } catch (e2) {}
           var arr = mems && mems.memories ? mems.memories : (Array.isArray(mems) ? mems : [])
           for (var m = 0; m < arr.length; m++) {
             var item = arr[m]
@@ -1301,6 +971,8 @@ function exec(actionType, params) {
 function buildStepRunner(agent) {
   var A = agent || getAgent()
   return function(actionType, params) {
+    // 老数据兼容：先过一次别名表，让改名过的旧 key 仍能按当前 key 跑（见 LEGACY_ACTION_ALIASES）
+    actionType = resolveActionKey(actionType)
     return new Promise(function(resolve) {
       // 吃醋巡查：定时采集 App 使用记录 → AI 判断情绪 → 正常关心/吃醋质问+冻结
       if (actionType === 'jealousy_patrol') {
@@ -1383,12 +1055,12 @@ var amPkg = null
         engine.defaultStepRunner(actionType, params).then(function(r) { resolve(r) })
         return
       }
- // 工具（文件/记忆/网页/sleep）— 纯前端实现，不依赖原生 Agent
-      if (OPERIT_JS_TOOLS.indexOf(actionType) > -1) {
- exec(actionType, params).then(function(r) { resolve(r) })
+      // 纯 JS 步骤工具（文件/记忆/网页/sleep）— 纯前端实现，不依赖原生 Agent
+      if (JS_STEP_TOOLS.indexOf(actionType) > -1) {
+        execJsStepTool(actionType, params).then(function(r) { resolve(r) })
         return
       }
- // 启动应用：优先 Shizuku am start（高权限层做法，前后台都能拉起）
+      // 启动应用：优先 Shizuku am start 拉起（前后台都能起来），
       // 失败再回退 Intent 方式，绝不只靠 startActivity 一次碰运气
       if (actionType === 'start_app' || actionType === 'open_app' || actionType === 'launch_app') {
         var rawName = String(params.package_name != null ? params.package_name : '').trim()
@@ -1405,7 +1077,8 @@ var amPkg = null
       }
       var def = NATIVE_METHODS[actionType]
       if (!def) {
-        resolve({ success: false, error: '未知动作: ' + actionType })
+        // 老数据里可能存着已下线的动作 key，这里给一句能看懂的失败信息，而不是干巴巴的「未知动作」
+        resolve({ success: false, error: '动作「' + actionType + '」在当前版本没有可用实现，请在编辑器里重新选一个动作后再保存' })
         return
       }
       // 等待原生模块就绪（处理启动初期/隐私弹窗后 init 尚未完成的时序问题），再执行

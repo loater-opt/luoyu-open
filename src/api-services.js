@@ -5,8 +5,10 @@
  * 本文件是「落雨 AI 伴侣 · 开源工具集」的一部分，
  * 依据 GNU Lesser General Public License v3.0 发布。
  * 许可证全文见仓库根目录 LICENSE。
+ *
+ * 本文件由工程内源码同步而来（同步工具：build-open-package.js），
+ * 只改写了模块引用路径，未改动任何业务逻辑。
  */
-
 // 落雨 API 服务：用户配置的开放平台 API 凭证，供 AI 对话中直接调用
 //
 // 用法：

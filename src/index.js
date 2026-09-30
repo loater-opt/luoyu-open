@@ -10,7 +10,6 @@
 
 import apiAdapter from './api-adapter.js'
 import apiServices from './api-services.js'
-import chatTools from './chat-tools.js'
 import mcp from './mcp.js'
 import chatMcp from './chat-mcp.js'
 import workflowEngine from './workflow-engine.js'
@@ -22,7 +21,6 @@ import waifu from './waifu.js'
 export {
   apiAdapter,
   apiServices,
-  chatTools,
   mcp,
   chatMcp,
   workflowEngine,
@@ -35,7 +33,6 @@ export {
 export default {
   apiAdapter,
   apiServices,
-  chatTools,
   mcp,
   chatMcp,
   workflowEngine,

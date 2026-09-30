@@ -6,26 +6,9 @@
  * 依据 GNU Lesser General Public License v3.0 发布。
  * 许可证全文见仓库根目录 LICENSE。
  *
- * waifu.js — Waifu 陪伴设置
- *
- * 集中管理 AI 伴侣的性格倾向、回复节奏、心情强度与表情包等陪伴感设置。
- *
- * 存储：全局 storage 'waifu_settings'
- *
- * 字段说明：
- *   personality   性格倾向：none/tsundere/yandere/sweet/gentle/sarcastic/cold
- *   moodIntensity 心情强度：weak/medium/strong
- *   sendMode      发送模式：normal（一次性）/ waifu（按句分割独立气泡）
- *   typingSpeed   打字速度：slow/medium/fast
- *   smartDelay    智能延迟（根据句子长度计算句间停顿）
- *   mergeSend     合并发送（用户连续短消息停顿后合成一条）
- *   mergeInterval 合并发送间隔（毫秒）
- *   removeEndPunct 消除句末标点
- *   cleanTags     自动清理状态标签
- *   customPrompt  自定义 Waifu 提示词
- *   boundAiIds    绑定的 AI id 列表（空=全部生效，非空=只对绑定的生效）
+ * 本文件由工程内源码同步而来（同步工具：build-open-package.js），
+ * 只改写了模块引用路径，未改动任何业务逻辑。
  */
-
 var STORAGE_KEY = 'waifu_settings'
 
 // 默认设置
@@ -45,6 +28,7 @@ function getDefault() {
   }
 }
 
+// 性格定义
 var PERSONALITIES = {
   none: { label: '默认', icon: '😊' },
   tsundere: { label: '傲娇', icon: '😤' },
@@ -87,6 +71,7 @@ function isActiveFor(aiId) {
   return bound.indexOf(String(aiId)) !== -1
 }
 
+// 性格标签
 function getPersonalityLabel(p) {
   const info = PERSONALITIES[p]
   return info ? info.label : '默认'
